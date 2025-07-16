@@ -7,6 +7,20 @@ import json
 import os
 import sys
 import re
+import io
+from functools import partial
+from collections import defaultdict
+
+# Precompiled regex patterns
+PROGRESS_REGEX = re.compile(r'\[download\]\s+(\d+\.\d+)%')
+SUCCESS_PATTERNS = [
+    re.compile(pattern) for pattern in [
+        r'\[download\] 100%', 
+        r'\[ExtractAudio\] Destination:', 
+        r'\[ffmpeg\] Destination:', 
+        r'\[Merger\] Merging formats into'
+    ]
+]
 
 # Main application class
 class YouTubeDownloaderApp(ctk.CTk):
@@ -23,13 +37,16 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.video_widgets = {}      # Stores references to widgets for each video (video_url: dict of widgets)
         self.is_fetching = False     # Flag to prevent multiple fetch operations
         self.download_path = os.getcwd() # Set default download path to current directory
+        self._path_cache = self.download_path  # Cache for path string to reduce string operations
+        self.pending_ui_updates = defaultdict(dict)  # Store pending UI updates to batch them
+        self.video_info_list = []    # Store video information
 
         # --- GUI Elements ---
         self.create_widgets()
 
         # --- Start monitoring downloads ---
         # This function will periodically check the status of all active downloads
-        self.after(100, self.monitor_downloads)
+        self.after(250, self.monitor_downloads)  # Reduced frequency (250ms instead of 100ms)
 
     def create_widgets(self):
         # Header Frame: Contains URL input and Load button
@@ -109,7 +126,8 @@ class YouTubeDownloaderApp(ctk.CTk):
         selected_path = filedialog.askdirectory()
         if selected_path:
             self.download_path = selected_path
-            self.path_label.configure(text=f"Save to: {self.download_path}")
+            self._path_cache = selected_path  # Update cache
+            self.path_label.configure(text=f"Save to: {selected_path}")
 
     def create_context_menu(self):
         """Creates and binds the right-click context menu for the URL entry."""
@@ -162,57 +180,89 @@ class YouTubeDownloaderApp(ctk.CTk):
     def fetch_playlist_titles(self, url):
         """Fetches video titles and URLs from a playlist using yt-dlp."""
         try:
-            command = ["yt-dlp", "--flat-playlist", "-j", url]
+            # Add --no-warnings to reduce output parsing overhead
+            command = ["yt-dlp", "--flat-playlist", "-j", "--no-warnings", url]
             process = subprocess.Popen(
                 command,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
+                stderr=subprocess.PIPE,  # Separate stderr
                 text=True,
+                bufsize=1,  # Line buffered for better memory management
                 universal_newlines=True
             )
 
+            # Clear the list before adding new items
             self.video_info_list = []
+            
+            # Process JSON output efficiently
             for line in iter(process.stdout.readline, ''):
-                if line.strip():
-                    try:
-                        video_json = json.loads(line)
-                        self.video_info_list.append({
-                            'title': video_json['title'],
-                            'url': video_json['url']
-                        })
-                    except json.JSONDecodeError:
-                        # Ignore lines that are not valid JSON (e.g., yt-dlp warnings)
-                        pass
-            process.wait()
-
+                if not line.strip():
+                    continue
+                    
+                try:
+                    video_json = json.loads(line)
+                    # Only extract required fields - title and url
+                    self.video_info_list.append({
+                        'title': video_json.get('title', 'Untitled Video'),
+                        'url': video_json.get('url', '')
+                    })
+                except json.JSONDecodeError:
+                    pass  # Skip invalid JSON
+            
+            # Wait with timeout to prevent hanging
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.terminate()
+                
             # Schedule display_videos to run on the main Tkinter thread
             self.after(0, self.display_videos)
 
         except Exception as e:
             # Schedule error message to run on the main Tkinter thread
-            self.after(0, lambda error_msg=e: messagebox.showerror("Error", f"Failed to fetch playlist: {error_msg}"))
+            self.after(0, lambda error_msg=str(e): messagebox.showerror("Error", f"Failed to fetch playlist: {error_msg}"))
         finally:
             self.is_fetching = False
-            self.load_button.configure(state=tk.NORMAL)
+            self.after(0, lambda: self.load_button.configure(state=tk.NORMAL))
 
     def display_videos(self):
         """Displays fetched video titles with download options."""
-        if self.video_info_list:
-            self.status_label.configure(text=f"Found {len(self.video_info_list)} videos. Ready to download.")
-            self.download_all_button.configure(state=tk.NORMAL)
+        if not self.video_info_list:
+            self.status_label.configure(text="No videos found in playlist.")
+            self.download_all_button.configure(state=tk.DISABLED)
+            return
+
+        # Batch these UI updates for efficiency
+        video_count = len(self.video_info_list)
+        self.status_label.configure(text=f"Found {video_count} videos. Ready to download.")
+        self.download_all_button.configure(state=tk.NORMAL)
+        
+        # Clear existing widgets if any - more efficient than destroying one by one
+        for widget in self.video_list_frame.winfo_children():
+            widget.destroy()
             
-            for video_info in self.video_info_list:
+        # Create widgets in batches for better performance
+        batch_size = 10  # Process 10 videos at a time to keep UI responsive
+        
+        def create_video_widgets(start_idx):
+            end_idx = min(start_idx + batch_size, video_count)
+            
+            for i in range(start_idx, end_idx):
+                video_info = self.video_info_list[i]
                 video_url = video_info['url']
                 
                 # Frame for each video row
                 row_frame = ctk.CTkFrame(self.video_list_frame, fg_color="transparent")
                 row_frame.pack(fill=tk.X, pady=2, padx=5)
 
-                # Video Title Label
-                ctk.CTkLabel(row_frame, text=video_info['title'], anchor="w", font=("Arial", 12)).pack(side=tk.LEFT, padx=5, expand=True)
+                # Video Title Label (reuse font reference)
+                title_font = ("Arial", 12)
+                ctk.CTkLabel(row_frame, text=video_info['title'], anchor="w", 
+                             font=title_font).pack(side=tk.LEFT, padx=5, expand=True)
 
                 # Status Label for individual video download
-                status_label = ctk.CTkLabel(row_frame, text="", fg_color="transparent", font=("Arial", 10))
+                status_label = ctk.CTkLabel(row_frame, text="", fg_color="transparent", 
+                                           font=("Arial", 10))
                 status_label.pack(side=tk.LEFT, padx=5)
                 
                 # Progress Bar for individual video download
@@ -220,21 +270,32 @@ class YouTubeDownloaderApp(ctk.CTk):
                 progress_bar.set(0)
                 progress_bar.pack(side=tk.LEFT, padx=5)
 
+                # Fetch available resolutions
+                resolutions = self.fetch_resolutions(video_url)
+                resolution_var = tk.StringVar(value=resolutions[0] if resolutions else "")
+                resolution_dropdown = ctk.CTkOptionMenu(
+                    row_frame,
+                    variable=resolution_var,
+                    values=resolutions,
+                    font=("Arial", 9)
+                )
+                resolution_dropdown.pack(side=tk.LEFT, padx=5)
+
                 # Audio Only Checkbox for each video
                 audio_only_video_var = ctk.BooleanVar(value=False)
                 audio_only_checkbox = ctk.CTkCheckBox(
                     row_frame,
-                    text="MP3", # Shorter text for individual checkbox
+                    text="MP3",
                     variable=audio_only_video_var,
                     font=("Arial", 9)
                 )
                 audio_only_checkbox.pack(side=tk.LEFT, padx=5)
 
-                # Download button for individual video
+                # Use partial instead of lambda for better memory efficiency
                 download_button = ctk.CTkButton(
                     row_frame,
                     text="Download",
-                    command=lambda url=video_url: self.start_single_download(url),
+                    command=partial(self.start_single_download, video_url, resolution_var),
                     font=("Arial", 12, "bold"),
                     width=100
                 )
@@ -244,7 +305,7 @@ class YouTubeDownloaderApp(ctk.CTk):
                 cancel_button = ctk.CTkButton(
                     row_frame,
                     text="Cancel",
-                    command=lambda url=video_url: self.cancel_single_download(url),
+                    command=partial(self.cancel_single_download, video_url),
                     state=tk.DISABLED,
                     fg_color="red",
                     hover_color="#c70000",
@@ -261,11 +322,39 @@ class YouTubeDownloaderApp(ctk.CTk):
                     'cancel_button': cancel_button,
                     'audio_only_var': audio_only_video_var, # Store the BooleanVar
                 }
-        else:
-            self.status_label.configure(text="No videos found in playlist.")
-            self.download_all_button.configure(state=tk.DISABLED)
+            
+            # If more videos to process, schedule the next batch
+            if end_idx < video_count:
+                self.after(1, lambda: create_video_widgets(end_idx))
+        
+        # Start the first batch of widget creation
+        create_video_widgets(0)
 
-    def start_single_download(self, video_url):
+    def fetch_resolutions(self, video_url):
+        """Fetches available resolutions for a video using yt-dlp."""
+        try:
+            command = ["yt-dlp", "-F", video_url]
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                universal_newlines=True
+            )
+            output, _ = process.communicate()
+            resolutions = []
+            for line in output.splitlines():
+                if "video only" in line or "audio only" in line:
+                    continue
+                match = re.search(r'(\d{3,4}x\d{3,4})', line)
+                if match:
+                    resolutions.append(match.group(1))
+            return resolutions
+        except Exception as e:
+            print(f"Error fetching resolutions: {e}")
+            return []
+
+    def start_single_download(self, video_url, resolution_var):
         """Prepares and starts the download of a single video in a new thread."""
         if video_url in self.download_processes: # Prevent double-clicking
             return
@@ -285,21 +374,492 @@ class YouTubeDownloaderApp(ctk.CTk):
     def run_download(self, video_url):
         """Executes the yt-dlp command for a single video."""
         widgets = self.video_widgets[video_url]
-        full_output = [] # To store all lines from yt-dlp for final analysis
+        
+        # Use StringIO for better memory efficiency instead of a list
+        output_buffer = io.StringIO()
+        last_progress = 0  # Track last progress to reduce UI updates
+        ui_update_counter = 0  # Counter to batch UI updates
         
         try:
-            # Base command arguments
+            # Base command arguments with optimized options
             command = ["yt-dlp", "--progress"]
+            # Add selected resolution format
+            resolution = resolution_var.get()
+            if resolution:
+                command.extend(["-f", f"bestvideo[height<={resolution.split('x')[1]}]+bestaudio/best[height<={resolution.split('x')[1]}]"])
             
-            # Add output template with selected path
-            output_template = os.path.join(self.download_path, "%(title)s.%(ext)s")
+            # Add output template with cached path
+            output_template = os.path.join(self._path_cache, "%(title)s.%(ext)s")
             command.extend(["-o", output_template])
 
-            # Check if audio-only is selected for THIS video
+            # Check if audio-only is selected
             if widgets['audio_only_var'].get():
                 command.extend(["--extract-audio", "--audio-format", "mp3", "--no-playlist"])
             
-            command.append(video_url) # Add the video URL last
+            command.append(video_url)
+
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            self.download_processes[video_url] = process
+            
+            # Initialize pending updates for this video URL
+            pending_updates = {}
+            
+            # Process output in chunks for better efficiency
+            while True:
+                line = process.stdout.readline()
+                if not line:
+                    break
+                
+                # Keep only the most recent 100 lines to reduce memory usage
+                if output_buffer.tell() > 10000:  # ~100 lines
+                    # Clear buffer but keep the last 2000 chars for success detection
+                    content = output_buffer.getvalue()
+                    output_buffer = io.StringIO()
+                    output_buffer.write(content[-2000:] if len(content) > 2000 else content)
+                
+                output_buffer.write(line)
+                
+                # Early termination check
+                if process.poll() is not None and not line.strip():
+                    break
+                
+                # Parse progress and update UI less frequently
+                match = PROGRESS_REGEX.search(line)
+                if match:
+                    try:
+                        percentage = float(match.group(1)) / 100.0
+                        
+                        # Only update UI if progress changed significantly (at least 1%)
+                        if abs(percentage - last_progress) >= 0.01:
+                            last_progress = percentage
+                            
+                            # Store updates to be applied later in batch
+                            pending_updates['progress'] = percentage
+                            pending_updates['status'] = line.strip()
+                            
+                            # Apply updates every few iterations to reduce overhead
+                            ui_update_counter += 1
+                            if ui_update_counter >= 5:  # Update UI every 5 progress changes
+                                self._batch_update_ui(video_url, pending_updates)
+                                pending_updates = {}
+                                ui_update_counter = 0
+                    except (ValueError, IndexError):
+                        pending_updates['status'] = line.strip()
+                else:
+                    # For non-progress lines, only update status if it's important
+                    # (contains certain keywords)
+                    lower_line = line.lower()
+                    if any(keyword in lower_line for keyword in ['error', 'warning', 'destination', 'merging']):
+                        pending_updates['status'] = line.strip()
+                        # Apply these important updates immediately
+                        self._batch_update_ui(video_url, pending_updates)
+                        pending_updates = {}
+                        ui_update_counter = 0
+            
+            # Apply any remaining updates
+            if pending_updates:
+                self._batch_update_ui(video_url, pending_updates)
+            
+            # Wait for process to complete with timeout
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.terminate()
+                process.wait(timeout=2)
+
+            # --- FINAL STATUS DETERMINATION ---
+            output_str = output_buffer.getvalue()
+            output_buffer.close()  # Free memory
+            
+            is_success = process.returncode == 0
+            
+            if not is_success:
+                # Check for success patterns even if returncode is non-zero
+                for pattern in SUCCESS_PATTERNS:
+                    if pattern.search(output_str):
+                        is_success = True
+                        break
+            
+            # Update UI for final status - in batch
+            final_updates = {
+                'status': "Download Completed!" if is_success else "Download Failed!",
+                'progress': 1.0 if is_success else 0.0,
+                'download_button_state': tk.NORMAL,
+                'cancel_button_state': tk.DISABLED
+            }
+            
+            # Apply final updates
+            self._batch_update_ui(video_url, final_updates)
+
+        except Exception as e:
+            # Handle exception and update UI
+            self._batch_update_ui(video_url, {
+                'status': f"Error: {str(e)}",
+                'progress': 0.0,
+                'download_button_state': tk.NORMAL,
+                'cancel_button_state': tk.DISABLED
+            })
+        finally:
+            # Clean up resources
+            if video_url in self.download_processes:
+                del self.download_processes[video_url]
+                
+            # Schedule a check to update global buttons state
+            self.after(50, self._check_global_buttons_state)
+            
+    def _batch_update_ui(self, video_url, updates):
+        """Helper method to batch UI updates and apply them at once"""
+        if video_url not in self.video_widgets:
+            return
+        
+        widgets = self.video_widgets[video_url]
+        
+        # Schedule a single UI update for efficiency
+        def update_ui():
+            if 'progress' in updates:
+                widgets['progress_bar'].set(updates['progress'])
+            if 'status' in updates:
+                widgets['status_label'].configure(text=updates['status'])
+            if 'download_button_state' in updates:
+                widgets['download_button'].configure(state=updates['download_button_state'])
+            if 'cancel_button_state' in updates:
+                widgets['cancel_button'].configure(state=updates['cancel_button_state'])
+                
+        # Schedule the batch update
+        self.after(0, update_ui)
+
+
+    def download_all(self):
+        """Starts downloading all videos in the loaded playlist."""
+        self.download_all_button.configure(state=tk.DISABLED)
+        self.cancel_all_button.configure(state=tk.NORMAL)
+        
+        # Start downloads with slight delay between each to prevent resource contention
+        def start_downloads_sequentially(index=0):
+            if index >= len(self.video_info_list):
+                return
+                
+            video_url = self.video_info_list[index]['url']
+            if video_url not in self.download_processes:
+                self.start_single_download(video_url)
+            
+            # Schedule next download with a small delay
+            self.after(200, lambda: start_downloads_sequentially(index + 1))
+        
+        # Start the sequential download process
+        start_downloads_sequentially()
+
+    def cancel_single_download(self, video_url):
+        """Terminates the subprocess for a specific video download."""
+        if video_url in self.download_processes:
+            process = self.download_processes[video_url]
+            process.terminate()
+            # Use batch update for UI changes
+            self._batch_update_ui(video_url, {
+                'status': "Cancelling...",
+                'progress': 0.0
+            })
+
+    def cancel_all(self):
+        """Terminates all active download subprocesses."""
+        self.status_label.configure(text="Cancelling all downloads...")
+        
+        # Create a list of keys to avoid dictionary changed size during iteration
+        keys_to_terminate = list(self.download_processes.keys())
+        
+        # Batch UI updates for all videos being cancelled
+        updates_by_video = {}
+        for video_url in keys_to_terminate:
+            process = self.download_processes[video_url]
+            process.terminate()
+            updates_by_video[video_url] = {
+                'status': "Cancelling...",
+                'progress': 0.0
+            }
+        
+        # Apply all UI updates at once
+        def apply_all_updates():
+            for url, updates in updates_by_video.items():
+                if url in self.video_widgets:
+                    widgets = self.video_widgets[url]
+                    widgets['status_label'].configure(text=updates['status'])
+                    widgets['progress_bar'].set(updates['progress'])
+                    
+        # Schedule a single UI update for efficiency
+        if updates_by_video:
+            self.after(0, apply_all_updates)
+
+    def monitor_downloads(self):
+        """Periodically checks the status of active downloads and updates UI."""
+        # We just need to check if there are any processes left to decide global button state
+        self._check_global_buttons_state()
+
+        # Check for any terminated processes that didn't clean up properly
+        active_processes = list(self.download_processes.keys())
+        for video_url in active_processes:
+            process = self.download_processes[video_url]
+            if process.poll() is not None:
+                # Process has terminated but wasn't removed from dictionary
+                # This could happen if the process was terminated externally
+                if video_url in self.download_processes:
+                    del self.download_processes[video_url]
+                    self._batch_update_ui(video_url, {
+                        'status': "Download interrupted",
+                        'progress': 0.0,
+                        'download_button_state': tk.NORMAL,
+                        'cancel_button_state': tk.DISABLED
+                    })
+
+        # Reschedule the next check with reduced frequency for lower overhead
+        self.after(250, self.monitor_downloads)
+
+    def _check_global_buttons_state(self):
+        """Helper to enable/disable global Download All/Cancel All buttons."""
+        has_active_downloads = bool(self.download_processes)
+        
+        # Avoid unnecessary UI updates
+        current_download_all_state = str(self.download_all_button.cget("state"))
+        current_cancel_all_state = str(self.cancel_all_button.cget("state"))
+        
+        # Only update if state needs to change
+        if not has_active_downloads:
+            if current_download_all_state != "normal":
+                self.download_all_button.configure(state=tk.NORMAL)
+            if current_cancel_all_state != "disabled":
+                self.cancel_all_button.configure(state=tk.DISABLED)
+                
+            # Only change global status label if it's currently showing "Cancelling..."
+            current_text = self.status_label.cget("text")
+            if current_text.startswith("Cancelling"):
+                self.status_label.configure(text="All downloads finished or cancelled.")
+        else:
+            if current_download_all_state != "disabled":
+                self.download_all_button.configure(state=tk.DISABLED)
+            if current_cancel_all_state != "normal":
+                self.cancel_all_button.configure(state=tk.NORMAL)
+
+
+if __name__ == "__main__":
+    app = YouTubeDownloaderApp()
+    app.mainloop()
+                # Keep only recent important information for error reporting
+                if "[download]" in line or "[ExtractAudio]" in line or "[Merger]" in line or "ERROR" in line:
+                    line_buffer = (line_buffer + line)[-500:]  # Keep only last 500 chars
+                
+                # Check if process terminated early (e.g., cancelled)
+                if process.poll() is not None and not line.strip(): 
+                    break  # Exit if process is done and no more output
+
+                # Update progress with throttling
+                match = PROGRESS_REGEX.search(line)
+                if match:
+                    try:
+                        percentage = float(match.group(1)) / 100.0
+                        current_time = time.time()
+                        # Only update UI at most 4 times per second to reduce overhead
+                        if current_time - last_progress_update_time >= update_interval:
+                            self._schedule_batch_ui_update(video_url, 'progress', percentage)
+                            self._schedule_batch_ui_update(video_url, 'status', line.strip())
+                            last_progress_update_time = current_time
+                    except (ValueError, IndexError):
+                        pass
+                elif "ERROR" in line:
+                    # Always show errors immediately
+                    self._schedule_batch_ui_update(video_url, 'status', line.strip())
+            
+            process.wait()  # Wait for the subprocess to truly complete
+
+            # --- FINAL STATUS DETERMINATION ---
+            is_success = process.returncode == 0 or success_indicators_found
+            
+            # Update UI on the main thread based on final determination
+            if is_success:
+                self._schedule_batch_ui_update(video_url, 'status', "Download Completed!")
+                self._schedule_batch_ui_update(video_url, 'progress', 1.0)  # Ensure 100%
+            else:
+                error_message = line_buffer.strip() if line_buffer else f"Unknown error (Exit Code: {process.returncode})"
+                self._schedule_batch_ui_update(video_url, 'status', f"Download Failed! Check log.")
+                self._schedule_batch_ui_update(video_url, 'progress', 0)  # Reset progress bar
+
+        except Exception as e:
+            self._schedule_batch_ui_update(video_url, 'status', f"Error: {str(e)}")
+        finally:
+            # Cleanup resources
+            if video_url in self.download_processes:
+                # Ensure process is terminated
+                try:
+                    if self.download_processes[video_url].poll() is None:
+                        self.download_processes[video_url].terminate()
+                except:
+                    pass
+                del self.download_processes[video_url]
+            
+            # Reset UI for this specific video
+            self._schedule_batch_ui_update(video_url, 'download_button', tk.NORMAL)
+            self._schedule_batch_ui_update(video_url, 'cancel_button', tk.DISABLED)
+            
+            # Force process batch updates
+            if self.update_scheduled:
+                self._process_batch_ui_updates()
+            
+            # Check if all downloads are complete to re-enable global download_all
+            self.after(0, self._check_global_buttons_state)
+
+
+    def download_all(self):
+        """Starts downloading all videos in the loaded playlist."""
+        if not hasattr(self, 'video_info_list') or not self.video_info_list:
+            return
+            
+        # Update global button state immediately
+        self.download_all_button.configure(state=tk.DISABLED)
+        self.cancel_all_button.configure(state=tk.NORMAL)
+        
+        # Limit concurrent downloads to avoid overwhelming system resources
+        MAX_CONCURRENT_DOWNLOADS = 3
+        active_downloads = 0
+        
+        # First collect the videos to download
+        videos_to_download = []
+        for video_info in self.video_info_list:
+            video_url = video_info['url']
+            if video_url not in self.download_processes:
+                videos_to_download.append(video_url)
+        
+        # Start downloads with limited concurrency
+        for video_url in videos_to_download:
+            if active_downloads >= MAX_CONCURRENT_DOWNLOADS:
+                break
+                
+            self.start_single_download(video_url)
+            active_downloads += 1
+        
+        # If there are more videos to download, set up a timer to check and start more
+        if active_downloads < len(videos_to_download):
+            self.remaining_downloads = videos_to_download[active_downloads:]
+            self.after(1000, self._continue_download_all)
+    
+    def _continue_download_all(self):
+        """Continues downloading videos when slots become available."""
+        if not hasattr(self, 'remaining_downloads') or not self.remaining_downloads:
+            return
+            
+        # Check how many downloads we can start
+        MAX_CONCURRENT_DOWNLOADS = 3
+        current_downloads = len(self.download_processes)
+        slots_available = MAX_CONCURRENT_DOWNLOADS - current_downloads
+        
+        if slots_available > 0 and self.remaining_downloads:
+            # Start up to slots_available new downloads
+            videos_to_start = self.remaining_downloads[:slots_available]
+            self.remaining_downloads = self.remaining_downloads[slots_available:]
+            
+            for video_url in videos_to_start:
+                if video_url not in self.download_processes:
+                    self.start_single_download(video_url)
+        
+        # If there are still more videos, schedule another check
+        if self.remaining_downloads:
+            self.after(1000, self._continue_download_all)
+
+    def cancel_single_download(self, video_url):
+        """Terminates the subprocess for a specific video download."""
+        if video_url in self.download_processes:
+            try:
+                process = self.download_processes[video_url]
+                # Try to kill process more forcefully for faster termination
+                if sys.platform == 'win32':
+                    # On Windows, use taskkill for more reliable termination
+                    subprocess.run(['taskkill', '/F', '/T', '/PID', str(process.pid)],
+                                 stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+                else:
+                    # On Unix, use SIGKILL for forceful termination
+                    os.kill(process.pid, 9)  # SIGKILL
+            except:
+                # Fallback to normal termination
+                try:
+                    process.terminate()
+                except:
+                    pass
+                    
+            # Update UI immediately for better responsiveness
+            self._schedule_batch_ui_update(video_url, 'status', "Cancelling...")
+            self._schedule_batch_ui_update(video_url, 'progress', 0)
+            
+            # Force-process updates immediately
+            self._process_batch_ui_updates()
+
+    def cancel_all(self):
+        """Terminates all active download subprocesses."""
+        if not self.download_processes:
+            return
+            
+        self.status_label.configure(text="Cancelling all downloads...")
+        
+        # Use a single list to avoid dictionary changed size during iteration
+        for video_url in list(self.download_processes.keys()):
+            self.cancel_single_download(video_url)
+            
+        # Batch process all UI updates at once
+        if self.update_scheduled:
+            self._process_batch_ui_updates()
+
+    def monitor_downloads(self):
+        """Periodically checks the status of active downloads and updates UI.
+        Runs at a reduced frequency (250ms instead of 100ms) to decrease CPU usage.
+        """
+        # Clean up any zombie processes
+        self._cleanup_finished_processes()
+        
+        # Update global button states
+        self._check_global_buttons_state()
+
+        # Reschedule the next check with reduced frequency (250ms)
+        self.after(250, self.monitor_downloads)
+        
+    def _cleanup_finished_processes(self):
+        """Check and remove any processes that have finished but weren't properly cleaned up."""
+        for video_url in list(self.download_processes.keys()):
+            process = self.download_processes[video_url]
+            # Check if the process has finished
+            if process.poll() is not None:
+                # Process has finished; make sure UI is updated and process is removed
+                if video_url in self.video_widgets:
+                    widgets = self.video_widgets[video_url]
+                    # Only update if not already updated
+                    if widgets['download_button'].cget("state") == tk.DISABLED:
+                        self._schedule_batch_ui_update(video_url, 'download_button', tk.NORMAL)
+                        self._schedule_batch_ui_update(video_url, 'cancel_button', tk.DISABLED)
+                        
+                # Remove from active processes dictionary
+                del self.download_processes[video_url]
+
+    def _check_global_buttons_state(self):
+        """Helper to enable/disable global Download All/Cancel All buttons."""
+        has_active_downloads = bool(self.download_processes)
+        
+        # Use a single batch update instead of multiple configure calls
+        if not has_active_downloads: 
+            self.download_all_button.configure(state=tk.NORMAL)
+            self.cancel_all_button.configure(state=tk.DISABLED)
+            
+            # Only change global status label if it's currently showing "Cancelling..."
+            current_status = self.status_label.cget("text")
+            if current_status.startswith("Cancelling"):
+                self.status_label.configure(text="All downloads finished or cancelled.")
+        else:
+            # Only update if state needs changing
+            if self.download_all_button.cget("state") != tk.DISABLED:
+                self.download_all_button.configure(state=tk.DISABLED)
+            if self.cancel_all_button.cget("state") != tk.NORMAL:
+                self.cancel_all_button.configure(state=tk.NORMAL)
 
             process = subprocess.Popen(
                 command,
