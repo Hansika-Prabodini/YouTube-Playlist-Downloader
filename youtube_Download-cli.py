@@ -68,7 +68,7 @@ def fetch_playlist_info(url):
 
         return video_info_list
 
-    except Exception as e:
+    except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
         print(f"An error occurred while fetching info: {e}")
         return []
 
@@ -149,7 +149,13 @@ def download_videos(videos_to_download):
             for line in iter(process.stdout.readline, ''):
                 sys.stdout.write(line)
             
-            process.wait()
+            process.wait()  # Wait for the process to complete
+            if process.returncode != 0:
+                print(f"Download of '{video['title']}' failed.")
+                continue  # Skip to the next video  # Wait for the process to complete
+            if process.returncode != 0:
+                print(f"Error occurred while fetching playlist info.")
+                return []
             
             if process.returncode == 0:
                 print(f"Download of '{video['title']}' completed successfully.")
