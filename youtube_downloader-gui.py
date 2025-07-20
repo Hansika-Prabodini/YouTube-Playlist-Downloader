@@ -22,7 +22,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.download_processes = {} # Stores active subprocesses (video_url: subprocess.Popen object)
         self.video_widgets = {}      # Stores references to widgets for each video (video_url: dict of widgets)
         self.is_fetching = False     # Flag to prevent multiple fetch operations
-        self.download_path = os.getcwd() # Set default download path to current directory
+        self.download_path = os.path.expanduser("~")  # Set default download path to user's home directory
 
         # --- GUI Elements ---
         self.create_widgets()
@@ -106,14 +106,14 @@ class YouTubeDownloaderApp(ctk.CTk):
 
     def select_download_path(self):
         """Opens a file dialog to select the download directory."""
-        selected_path = filedialog.askdirectory()
+        selected_path = filedialog.askdirectory(title="Select Download Folder")  # Add title to the dialog
         if selected_path:
             self.download_path = selected_path
             self.path_label.configure(text=f"Save to: {self.download_path}")
 
     def create_context_menu(self):
         """Creates and binds the right-click context menu for the URL entry."""
-        self.context_menu = tk.Menu(self, tearoff=0)
+        self.context_menu = tk.Menu(self, tearoff=0, relief=tk.FLAT)  # Use a flat relief for a cleaner look
         self.context_menu.add_command(label="Cut", command=lambda: self.url_entry.event_generate("<<Cut>>"))
         self.context_menu.add_command(label="Copy", command=lambda: self.url_entry.event_generate("<<Copy>>"))
         self.context_menu.add_command(label="Paste", command=self.paste_from_clipboard)
@@ -162,7 +162,7 @@ class YouTubeDownloaderApp(ctk.CTk):
     def fetch_playlist_titles(self, url):
         """Fetches video titles and URLs from a playlist using yt-dlp."""
         try:
-            command = ["yt-dlp", "--flat-playlist", "-j", url]
+            command = ["yt-dlp", "--flat-playlist", "-j", url, "--no-warnings"]  # Suppress warnings for cleaner output
             process = subprocess.Popen(
                 command,
                 stdout=subprocess.PIPE,
@@ -292,7 +292,7 @@ class YouTubeDownloaderApp(ctk.CTk):
             command = ["yt-dlp", "--progress"]
             
             # Add output template with selected path
-            output_template = os.path.join(self.download_path, "%(title)s.%(ext)s")
+            output_template = os.path.join(self.download_path, "%(title)s.%(ext)s").replace(" ", "_")  # Replace spaces in filenames
             command.extend(["-o", output_template])
 
             # Check if audio-only is selected for THIS video
@@ -330,11 +330,11 @@ class YouTubeDownloaderApp(ctk.CTk):
                     try:
                         percentage = float(match.group(1)) / 100.0
                         self.after(0, lambda p=percentage: widgets['progress_bar'].set(p))
-                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
+                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l), delay=2000)  # Delay for better visibility
                     except (ValueError, IndexError):
-                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
+                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l), delay=2000)  # Delay for better visibility
                 else:
-                    self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
+                    self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l), delay=2000)  # Delay for better visibility
             
             process.wait() # Wait for the subprocess to truly complete
 
@@ -361,11 +361,11 @@ class YouTubeDownloaderApp(ctk.CTk):
                 error_message = combined_output_str.strip()
                 if not error_message: # Fallback if output is empty
                     error_message = f"Unknown error (Exit Code: {process.returncode})"
-                self.after(0, lambda e_msg=error_message: widgets['status_label'].configure(text=f"Download Failed! {e_msg}"))
+                self.after(0, lambda e_msg=error_message: widgets['status_label'].configure(text=f"Download Failed! {e_msg}"), delay=2000)  # Delay for better visibility
                 self.after(0, lambda: widgets['progress_bar'].set(0)) # Reset or show failed state
 
         except Exception as e:
-            self.after(0, lambda error_msg=e: widgets['status_label'].configure(text=f"Error: {error_msg}"))
+            self.after(0, lambda error_msg=str(e): widgets['status_label'].configure(text=f"Error: {error_msg}"))  # Ensure error message is a string
         finally:
             # Cleanup and reset UI for this specific video
             if video_url in self.download_processes:
@@ -393,11 +393,12 @@ class YouTubeDownloaderApp(ctk.CTk):
         """Terminates the subprocess for a specific video download."""
         if video_url in self.download_processes:
             process = self.download_processes[video_url]
-            process.terminate() # Send termination signal
+            process.terminate()  # Send termination signal
+            process.wait()  # Ensure the process has terminated before proceeding
             # The run_download's finally block will handle cleanup and UI reset
             widgets = self.video_widgets[video_url]
-            self.after(0, lambda: widgets['status_label'].configure(text="Cancelling...")) # Immediate feedback
-            self.after(0, lambda: widgets['progress_bar'].set(0)) # Reset progress bar immediately
+            self.after(0, lambda: widgets['status_label'].configure(text="Cancelling..."), delay=2000)  # Delay for better visibility
+            self.after(0, lambda: widgets['progress_bar'].set(0), delay=2000)  # Delay for better visibility
 
     def cancel_all(self):
         """Terminates all active download subprocesses."""
@@ -410,8 +411,8 @@ class YouTubeDownloaderApp(ctk.CTk):
             process.terminate()
             # The run_download's finally block for each video will handle its cleanup.
             widgets = self.video_widgets[video_url]
-            self.after(0, lambda: widgets['status_label'].configure(text="Cancelling...")) # Immediate feedback
-            self.after(0, lambda: widgets['progress_bar'].set(0)) # Reset progress bar immediately
+            self.after(0, lambda: widgets['status_label'].configure(text="Cancelling..."), delay=2000)  # Delay for better visibility
+            self.after(0, lambda: widgets['progress_bar'].set(0), delay=2000)  # Delay for better visibility
 
         # Global buttons will be reset by _check_global_buttons_state once all processes terminate
 
