@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import re
+import collections
 
 # Main application class
 class YouTubeDownloaderApp(ctk.CTk):
@@ -26,6 +27,10 @@ class YouTubeDownloaderApp(ctk.CTk):
 
         # --- GUI Elements ---
         self.create_widgets()
+
+        # --- Regular Expressions ---
+        # Compile regex once to avoid re-compilation for each download.
+        self.progress_regex = re.compile(r'\[download\]\s+(\d+\.\d+)%')
 
         # --- Start monitoring downloads ---
         # This function will periodically check the status of all active downloads
@@ -285,7 +290,11 @@ class YouTubeDownloaderApp(ctk.CTk):
     def run_download(self, video_url):
         """Executes the yt-dlp command for a single video."""
         widgets = self.video_widgets[video_url]
-        full_output = [] # To store all lines from yt-dlp for final analysis
+        # Use deque to store only the last N lines of output.
+        # This limits memory usage, especially for verbose yt-dlp output,
+        # while still providing sufficient context for error messages.
+        MAX_ERROR_CONTEXT_LINES = 100 
+        full_output_buffer = collections.deque(maxlen=MAX_ERROR_CONTEXT_LINES)
         
         try:
             # Base command arguments
@@ -312,20 +321,18 @@ class YouTubeDownloaderApp(ctk.CTk):
             self.download_processes[video_url] = process
             
             # Read output in a loop to update progress
-            progress_regex = re.compile(r'\[download\]\s+(\d+\.\d+)%')
-            
             while True:
                 line = process.stdout.readline()
                 if not line: # No more output
                     break
                 
-                full_output.append(line) # Store every line
+                full_output_buffer.append(line) # Store in the limited buffer
 
                 # Check if process terminated early (e.g., cancelled)
                 if process.poll() is not None and not line.strip(): 
                     break # Exit if process is done and no more output
 
-                match = progress_regex.search(line)
+                match = self.progress_regex.search(line) # Use pre-compiled regex
                 if match:
                     try:
                         percentage = float(match.group(1)) / 100.0
@@ -340,7 +347,8 @@ class YouTubeDownloaderApp(ctk.CTk):
 
             # --- FINAL STATUS DETERMINATION ---
             is_success = False
-            combined_output_str = "".join(full_output)
+            # Join only the collected lines from the buffer for final status/error analysis
+            combined_output_str = "".join(full_output_buffer)
 
             if process.returncode == 0:
                 is_success = True
