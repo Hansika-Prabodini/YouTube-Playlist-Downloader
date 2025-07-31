@@ -45,16 +45,10 @@ def fetch_playlist_info(url):
             url
         ]
         
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            universal_newlines=True
-        )
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
         video_info_list = []
-        for line in iter(process.stdout.readline, ''):
+        for line in process.stdout:
             if line.strip():
                 try:
                     video_json = json.loads(line)
@@ -146,13 +140,13 @@ def download_videos(videos_to_download):
                 universal_newlines=True
             )
             
-            for line in iter(process.stdout.readline, ''):
+            for line in process.stdout:
                 sys.stdout.write(line)
             
             process.wait()
             
-            if process.returncode == 0:
-                print(f"Download of '{video['title']}' completed successfully.")
+            if process.wait() == 0:
+                print(f"Download of '{video['title']}' completed successfully.") if process.returncode == 0 else print(f"Download of '{video['title']}' failed.")
             else:
                 print(f"Download of '{video['title']}' failed.")
                 
