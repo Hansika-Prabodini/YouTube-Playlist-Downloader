@@ -7,7 +7,7 @@ import json
 import os
 import sys
 import re
-import collections
+from collections import deque
 
 # Main application class
 class YouTubeDownloaderApp(ctk.CTk):
@@ -294,11 +294,11 @@ class YouTubeDownloaderApp(ctk.CTk):
         # This limits memory usage, especially for verbose yt-dlp output,
         # while still providing sufficient context for error messages.
         MAX_ERROR_CONTEXT_LINES = 100 
-        full_output_buffer = collections.deque(maxlen=MAX_ERROR_CONTEXT_LINES)
+        full_output_buffer = deque(maxlen=MAX_ERROR_CONTEXT_LINES)
         
         try:
             # Base command arguments
-            command = ["yt-dlp", "--progress"]
+            command = ["yt-dlp", "--progress", "--no-playlist"]
             
             # Add output template with selected path
             output_template = os.path.join(self.download_path, "%(title)s.%(ext)s")
@@ -337,11 +337,14 @@ class YouTubeDownloaderApp(ctk.CTk):
                     try:
                         percentage = float(match.group(1)) / 100.0
                         self.after(0, lambda p=percentage: widgets['progress_bar'].set(p))
-                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
+                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l),
+                          lambda l=line.strip(): widgets['status_label'].configure(text=l))
                     except (ValueError, IndexError):
-                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
+                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l),
+                          lambda l=line.strip(): widgets['status_label'].configure(text=l))
                 else:
-                    self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
+                    self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l),
+                          lambda l=line.strip(): widgets['status_label'].configure(text=l))
             
             process.wait() # Wait for the subprocess to truly complete
 
@@ -369,8 +372,8 @@ class YouTubeDownloaderApp(ctk.CTk):
                 error_message = combined_output_str.strip()
                 if not error_message: # Fallback if output is empty
                     error_message = f"Unknown error (Exit Code: {process.returncode})"
-                self.after(0, lambda e_msg=error_message: widgets['status_label'].configure(text=f"Download Failed! {e_msg}"))
-                self.after(0, lambda: widgets['progress_bar'].set(0)) # Reset or show failed state
+                self.after(0, lambda e_msg=error_message: widgets['status_label'].configure(text=f"Download Failed! {e_msg}"),
+                          lambda: widgets['progress_bar'].set(0)) # Reset or show failed state
 
         except Exception as e:
             self.after(0, lambda error_msg=e: widgets['status_label'].configure(text=f"Error: {error_msg}"))
@@ -379,8 +382,8 @@ class YouTubeDownloaderApp(ctk.CTk):
             if video_url in self.download_processes:
                 del self.download_processes[video_url]
             
-            self.after(0, lambda: widgets['download_button'].configure(state=tk.NORMAL))
-            self.after(0, lambda: widgets['cancel_button'].configure(state=tk.DISABLED))
+            self.after(0, lambda: widgets['download_button'].configure(state=tk.NORMAL),
+                      lambda: widgets['cancel_button'].configure(state=tk.DISABLED))
             
             # Check if all downloads are complete to re-enable global download_all
             self.after(0, self._check_global_buttons_state)
@@ -404,22 +407,22 @@ class YouTubeDownloaderApp(ctk.CTk):
             process.terminate() # Send termination signal
             # The run_download's finally block will handle cleanup and UI reset
             widgets = self.video_widgets[video_url]
-            self.after(0, lambda: widgets['status_label'].configure(text="Cancelling...")) # Immediate feedback
-            self.after(0, lambda: widgets['progress_bar'].set(0)) # Reset progress bar immediately
+            self.after(0, lambda: widgets['status_label'].configure(text="Cancelling..."),
+                      lambda: widgets['progress_bar'].set(0)) # Reset progress bar immediately
 
     def cancel_all(self):
         """Terminates all active download subprocesses."""
         self.status_label.configure(text="Cancelling all downloads...")
         
         # Create a list of keys to avoid RuntimeError: dictionary changed size during iteration
-        keys_to_terminate = list(self.download_processes.keys())
+        keys_to_terminate = list(self.download_processes)  # Avoid RuntimeError during iteration
         for video_url in keys_to_terminate:
             process = self.download_processes[video_url]
             process.terminate()
             # The run_download's finally block for each video will handle its cleanup.
             widgets = self.video_widgets[video_url]
-            self.after(0, lambda: widgets['status_label'].configure(text="Cancelling...")) # Immediate feedback
-            self.after(0, lambda: widgets['progress_bar'].set(0)) # Reset progress bar immediately
+            self.after(0, lambda: widgets['status_label'].configure(text="Cancelling..."),
+                      lambda: widgets['progress_bar'].set(0)) # Reset progress bar immediately
 
         # Global buttons will be reset by _check_global_buttons_state once all processes terminate
 
