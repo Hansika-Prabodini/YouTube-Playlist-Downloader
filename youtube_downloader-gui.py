@@ -293,7 +293,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         # Use deque to store only the last N lines of output.
         # This limits memory usage, especially for verbose yt-dlp output,
         # while still providing sufficient context for error messages.
-        MAX_ERROR_CONTEXT_LINES = 100 
+        MAX_ERROR_CONTEXT_LINES = 50 
         full_output_buffer = deque(maxlen=MAX_ERROR_CONTEXT_LINES)
         
         try:
@@ -306,7 +306,7 @@ class YouTubeDownloaderApp(ctk.CTk):
 
             # Check if audio-only is selected for THIS video
             if widgets['audio_only_var'].get():
-                command.extend(["--extract-audio", "--audio-format", "mp3", "--no-playlist"])
+                command.extend(["--extract-audio", "--audio-format", "mp3"])
             
             command.append(video_url) # Add the video URL last
 
@@ -321,71 +321,61 @@ class YouTubeDownloaderApp(ctk.CTk):
             self.download_processes[video_url] = process
             
             # Read output in a loop to update progress
-            while True:
-                line = process.stdout.readline()
-                if not line: # No more output
+            for line in process.stdout:
+                if not line:
                     break
                 
                 full_output_buffer.append(line) # Store in the limited buffer
 
-                # Check if process terminated early (e.g., cancelled)
-                if process.poll() is not None and not line.strip(): 
-                    break # Exit if process is done and no more output
+                # process termination and empty line check combined for early break
+                if process.poll() is not None and line.strip() == '':
+                    break
 
-                match = self.progress_regex.search(line) # Use pre-compiled regex
+                match = self.progress_regex.search(line)
                 if match:
                     try:
                         percentage = float(match.group(1)) / 100.0
                         self.after(0, lambda p=percentage: widgets['progress_bar'].set(p))
-                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l),
-                          lambda l=line.strip(): widgets['status_label'].configure(text=l))
+                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
                     except (ValueError, IndexError):
-                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l),
-                          lambda l=line.strip(): widgets['status_label'].configure(text=l))
+                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
                 else:
-                    self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l),
-                          lambda l=line.strip(): widgets['status_label'].configure(text=l))
+                    self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
             
-            process.wait() # Wait for the subprocess to truly complete
+            process.wait()
 
             # --- FINAL STATUS DETERMINATION ---
             is_success = False
-            # Join only the collected lines from the buffer for final status/error analysis
             combined_output_str = "".join(full_output_buffer)
 
             if process.returncode == 0:
                 is_success = True
             else:
-                # Even if returncode is non-zero, check for success indicators in output
-                # This handles cases where yt-dlp exits with warnings but completes successfully
-                if (re.search(r'\[download\] 100%', combined_output_str) or # Explicit 100% download
-                    re.search(r'\[ExtractAudio\] Destination:', combined_output_str) or # Audio extracted
-                    re.search(r'\[ffmpeg\] Destination:', combined_output_str) or     # ffmpeg conversion/merge
-                    re.search(r'\[Merger\] Merging formats into', combined_output_str)): # Video/audio merged
+                if (re.search(r'\[download\] 100%', combined_output_str) or
+                    re.search(r'\[ExtractAudio\] Destination:', combined_output_str) or
+                    re.search(r'\[ffmpeg\] Destination:', combined_output_str) or
+                    re.search(r'\[Merger\] Merging formats into', combined_output_str)):
                     is_success = True
             
-            # Update UI on the main thread based on final determination
             if is_success:
                 self.after(0, lambda: widgets['status_label'].configure(text="Download Completed!"))
-                self.after(0, lambda: widgets['progress_bar'].set(1.0)) # Ensure 100%
+                self.after(0, lambda: widgets['progress_bar'].set(1.0))
             else:
                 error_message = combined_output_str.strip()
-                if not error_message: # Fallback if output is empty
+                if not error_message:
                     error_message = f"Unknown error (Exit Code: {process.returncode})"
-                self.after(0, lambda e_msg=error_message: widgets['status_label'].configure(text=f"Download Failed! {e_msg}"),
-                          lambda: widgets['progress_bar'].set(0)) # Reset or show failed state
+                self.after(0, lambda e_msg=error_message: widgets['status_label'].configure(text=f"Download Failed! {e_msg}"))
+                self.after(0, lambda: widgets['progress_bar'].set(0))
 
         except Exception as e:
             self.after(0, lambda error_msg=e: widgets['status_label'].configure(text=f"Error: {error_msg}"))
         finally:
-            # Cleanup and reset UI for this specific video
             if video_url in self.download_processes:
                 del self.download_processes[video_url]
             
-            self.after(0, lambda: widgets['download_button'].configure(state=tk.NORMAL),
-                      lambda: widgets['cancel_button'].configure(state=tk.DISABLED))
+            self.after(0, lambda: widgets['download_button'].configure(state=tk.NORMAL))
+            self.after(0, lambda: widgets['cancel_button'].configure(state=tk.DISABLED))
             
-            # Check if all downloads are complete to re-enable global download_all
             self.after(0, self._check_global_buttons_state)
 
 

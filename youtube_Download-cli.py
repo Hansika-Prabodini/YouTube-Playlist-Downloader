@@ -45,10 +45,10 @@ def fetch_playlist_info(url):
             url
         ]
         
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False)
 
         video_info_list = []
-        for line in process.stdout:
+        for line in iter(process.stdout.readline, b''):
             if line.strip():
                 try:
                     video_json = json.loads(line)
@@ -131,12 +131,12 @@ def download_videos(videos_to_download):
             command = ["yt-dlp", "--progress", video['url']]
             
             # Use Popen to show real-time progress
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False)
             
-            for line in process.stdout:
+            for line in iter(process.stdout.readline, b''):
                 sys.stdout.write(line)
             
-            process.wait()  # Wait for the process to complete and free resources
+            process.communicate()  # Wait for the process to complete and free resources
             
             if process.returncode == 0:
                 print(f"Download of '{video['title']}' completed successfully.")
