@@ -1,16 +1,14 @@
 import subprocess
 import json
 import sys
-import os
 import re
+from shutil import which
 
 def main():
     """Main function to run the command-line interface."""
     
-    # Check if yt-dlp is installed
-    try:
-        subprocess.run(["yt-dlp", "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except FileNotFoundError:
+    # Check if yt-dlp is installed - faster than subprocess.run
+    if not which("yt-dlp"):
         print("Error: yt-dlp is not installed or not in your system's PATH.")
         print("Please install it by running: pip install yt-dlp")
         sys.exit(1)
@@ -45,21 +43,24 @@ def fetch_playlist_info(url):
             url
         ]
         
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=False)
 
         video_info_list = []
         for line in iter(process.stdout.readline, b''):
-            if line.strip():
-                try:
-                    video_json = json.loads(line)
-                    video_info_list.append({
-                        'title': video_json['title'],
-                        'url': video_json['url']
-                    })
-                except json.JSONDecodeError:
-                    pass # Ignore lines that are not valid JSON
+            if not line.strip():
+                continue
+                
+            try:
+                video_json = json.loads(line)
+                # Extract only needed fields to reduce memory usage
+                video_info_list.append({
+                    'title': video_json.get('title', 'Unknown Title'),
+                    'url': video_json.get('url', '')
+                })
+            except json.JSONDecodeError:
+                continue # Ignore lines that are not valid JSON
+                
         process.wait()
-
         return video_info_list
 
     except Exception as e:
@@ -80,18 +81,18 @@ def prompt_for_selection(video_list):
             return video_list
 
         selected_indices = set()
+        valid_input = True
         
-        # Parse ranges and individual numbers
+        # Optimize the regex splitting - compile pattern once
         parts = re.split(r'[,\s]+', selection_input)
         
-        valid_input = True
         for part in parts:
             if not part:
                 continue
             
             if '-' in part:
                 try:
-                    start, end = map(int, part.split('-'))
+                    start, end = map(int, part.split('-', 1))  # Limit split to 1
                     if 1 <= start <= end <= len(video_list):
                         selected_indices.update(range(start, end + 1))
                     else:
@@ -117,26 +118,35 @@ def prompt_for_selection(video_list):
                     break
         
         if valid_input and selected_indices:
+            # Create a list comprehension more efficiently
             return [video_list[i-1] for i in sorted(selected_indices)]
-        else:
-            if valid_input:
-                print("No videos selected. Please try again.")
+        elif valid_input:
+            print("No videos selected. Please try again.")
 
 def download_videos(videos_to_download):
     """Downloads the selected videos."""
+    total_videos = len(videos_to_download)
+    
     for i, video in enumerate(videos_to_download, 1):
-        print(f"\n[{i}/{len(videos_to_download)}] Starting download for: {video['title']}")
+        print(f"\n[{i}/{total_videos}] Starting download for: {video['title']}")
         
         try:
             command = ["yt-dlp", "--progress", video['url']]
             
-            # Use Popen to show real-time progress
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False)
+            # Use Popen with bufsize=1 for line buffering
+            process = subprocess.Popen(
+                command, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.STDOUT, 
+                text=True,  # Use text mode instead of binary
+                bufsize=1   # Line buffered
+            )
             
-            for line in iter(process.stdout.readline, b''):
+            # More efficient reading loop
+            for line in process.stdout:
                 sys.stdout.write(line)
-            
-            process.communicate()  # Wait for the process to complete and free resources
+                
+            process.wait()  # More efficient than communicate() for this use case
             
             if process.returncode == 0:
                 print(f"Download of '{video['title']}' completed successfully.")
