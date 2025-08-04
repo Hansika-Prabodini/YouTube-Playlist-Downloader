@@ -60,7 +60,7 @@ cd path/to/your/folder
 
 Run the script:
 
-python youtube_downloader-gui.py or ./youtube_downloader-gui.py
+python youtube_downloader.py or ./youtube_downloader.py
 
 A graphical window will appear. Paste your YouTube playlist or video URL, click "Load Playlist," and then choose your download options.
 
@@ -78,6 +78,6 @@ cd path/to/your/folder
 
 Run the script:
 
-python youtube_Download-cli.py or ./youtube_Download-cli.py
+python youtube_cli.py or ./youtube_cli.py
 
 The script will prompt you directly in the terminal to enter a URL and guide you through the selection and download process.
