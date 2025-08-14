@@ -41,31 +41,31 @@ def fetch_playlist_info(url):
             "yt-dlp",
             "--flat-playlist",
             "-j",
-            "--no-warnings", # Hide warnings for a cleaner output
+            "--no-warnings",  # Hide warnings for a cleaner output
             url
         ]
-        
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False)
 
-        video_info_list = []
-        for line in iter(process.stdout.readline, b''):
-            if line.strip():
-                try:
-                    video_json = json.loads(line)
-                    video_info_list.append({
-                        'title': video_json['title'],
-                        'url': video_json['url']
-                    })
-                except json.JSONDecodeError:
-                    pass # Ignore lines that are not valid JSON
-        process.wait()
+        # Use text=True to handle output as text, simpler iteration and less memory overhead
+        with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) as process:
+            video_info_list = []
+            for line in process.stdout:
+                line = line.strip()
+                if line:
+                    try:
+                        video_json = json.loads(line)
+                        video_info_list.append({
+                            'title': video_json['title'],
+                            'url': video_json['url']
+                        })
+                    except json.JSONDecodeError:
+                        pass  # Ignore lines that are not valid JSON
+            process.wait()
 
         return video_info_list
 
     except Exception as e:
         print(f"An error occurred while fetching info: {e}")
         return []
-
 def prompt_for_selection(video_list):
     """Displays videos and prompts user for selection."""
     print("\n------------------ Videos Found ------------------")
