@@ -1,26 +1,28 @@
 # llm-benchmarking-py
 
+A collection of Python functions to benchmark LLM projects.
+
 ## Usage
 
-Build:
+### Build:
 
 ```shell
 poetry install
 ```
 
-Run Main:
+### Run Main:
 
 ```shell
 poetry run main
 ```
 
-Run Unit Tests:
+### Run Unit Tests:
 
 ```shell
 poetry run pytest --benchmark-skip tests/
 ```
 
-Run Benchmarking:
+### Run Benchmarking:
 
 ```shell
 poetry run pytest --benchmark-only tests/
