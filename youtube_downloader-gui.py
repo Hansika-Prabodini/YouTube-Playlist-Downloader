@@ -172,8 +172,7 @@ class YouTubeDownloaderApp(ctk.CTk):
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True,
-                universal_newlines=True
+                text=True
             )
 
             self.video_info_list = []
@@ -315,8 +314,7 @@ class YouTubeDownloaderApp(ctk.CTk):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, # Merge stdout and stderr for simpler parsing
                 text=True,
-                bufsize=1, # Line-buffered output
-                universal_newlines=True
+                bufsize=1  # Line-buffered output
             )
             self.download_processes[video_url] = process
             
@@ -397,8 +395,8 @@ class YouTubeDownloaderApp(ctk.CTk):
             process.terminate() # Send termination signal
             # The run_download's finally block will handle cleanup and UI reset
             widgets = self.video_widgets[video_url]
-            self.after(0, lambda: widgets['status_label'].configure(text="Cancelling..."),
-                      lambda: widgets['progress_bar'].set(0)) # Reset progress bar immediately
+            self.after(0, lambda: (widgets['status_label'].configure(text="Cancelling..."),
+                                    widgets['progress_bar'].set(0))) # Reset progress bar immediately
 
     def cancel_all(self):
         """Terminates all active download subprocesses."""
@@ -411,8 +409,8 @@ class YouTubeDownloaderApp(ctk.CTk):
             process.terminate()
             # The run_download's finally block for each video will handle its cleanup.
             widgets = self.video_widgets[video_url]
-            self.after(0, lambda: widgets['status_label'].configure(text="Cancelling..."),
-                      lambda: widgets['progress_bar'].set(0)) # Reset progress bar immediately
+            self.after(0, lambda: (widgets['status_label'].configure(text="Cancelling..."),
+                                    widgets['progress_bar'].set(0))) # Reset progress bar immediately
 
         # Global buttons will be reset by _check_global_buttons_state once all processes terminate
 
