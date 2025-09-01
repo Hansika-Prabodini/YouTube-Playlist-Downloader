@@ -9,10 +9,10 @@ def main():
     
     # Check if yt-dlp is installed
     try:
-        subprocess.run(["yt-dlp", "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["yt-dlp", "--version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except FileNotFoundError:
-        print("Error: yt-dlp is not installed or not in your system's PATH.")
-        print("Please install it by running: pip install yt-dlp")
+        print("Error: yt-dlp is not installed or not in your system's PATH. Please install it by running: pip install yt-dlp")
+        print("Please install it by running: pip install yt-dlp and ensure it is in your system's PATH.")
         sys.exit(1)
 
     print("============================================")
@@ -45,10 +45,16 @@ def fetch_playlist_info(url):
             url
         ]
         
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False)
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            universal_newlines=True
+        )
 
         video_info_list = []
-        for line in iter(process.stdout.readline, b''):
+        for line in iter(process.stdout.readline, ''):
             if line.strip():
                 try:
                     video_json = json.loads(line)
@@ -95,11 +101,11 @@ def prompt_for_selection(video_list):
                     if 1 <= start <= end <= len(video_list):
                         selected_indices.update(range(start, end + 1))
                     else:
-                        print("Invalid range. Please enter valid numbers.")
+                        print("Invalid range. Please enter valid numbers within the playlist.")
                         valid_input = False
                         break
                 except ValueError:
-                    print("Invalid range format. Use numbers and a dash (e.g., 1-10).")
+                    print("Invalid range format. Please use a valid number range (e.g., 5-8).")
                     valid_input = False
                     break
             else:
@@ -108,11 +114,11 @@ def prompt_for_selection(video_list):
                     if 1 <= index <= len(video_list):
                         selected_indices.add(index)
                     else:
-                        print("Invalid number. Please enter a valid number from the list.")
+                        print("Invalid number. Please select a valid number from the displayed list.")
                         valid_input = False
                         break
                 except ValueError:
-                    print("Invalid input. Please use numbers or 'all'.")
+                    print("Invalid input. Please enter numbers or 'all' to select all videos.")
                     valid_input = False
                     break
         
@@ -120,7 +126,7 @@ def prompt_for_selection(video_list):
             return [video_list[i-1] for i in sorted(selected_indices)]
         else:
             if valid_input:
-                print("No videos selected. Please try again.")
+                print("No videos were selected. Please try again with valid input.")
 
 def download_videos(videos_to_download):
     """Downloads the selected videos."""
@@ -131,17 +137,24 @@ def download_videos(videos_to_download):
             command = ["yt-dlp", "--progress", video['url']]
             
             # Use Popen to show real-time progress
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False)
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
             
-            for line in iter(process.stdout.readline, b''):
+            for line in iter(process.stdout.readline, ''):
                 sys.stdout.write(line)
             
-            process.communicate()  # Wait for the process to complete and free resources
+            process.wait()
             
             if process.returncode == 0:
                 print(f"Download of '{video['title']}' completed successfully.")
             else:
-                print(f"Download of '{video['title']}' failed.")
+                print(f"Download of '{video['title']}' failed with return code: {process.returncode}.")
                 
         except Exception as e:
             print(f"An error occurred during download: {e}")
