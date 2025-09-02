@@ -10,9 +10,9 @@ def main():
     # Check if yt-dlp is installed
     try:
         subprocess.run(["yt-dlp", "--version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    except FileNotFoundError:
-        print("Error: yt-dlp is not installed or not in your system's PATH. Please install it by running: pip install yt-dlp")
-        print("Please install it by running: pip install yt-dlp and ensure it is in your system's PATH.")
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        print("Error: yt-dlp is not installed or not in your system's PATH.")
+        print("Please install it by running: pip install yt-dlp")
         sys.exit(1)
 
     print("============================================")
@@ -49,8 +49,7 @@ def fetch_playlist_info(url):
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
-            universal_newlines=True
+            text=True
         )
 
         video_info_list = []
@@ -62,8 +61,8 @@ def fetch_playlist_info(url):
                         'title': video_json['title'],
                         'url': video_json['url']
                     })
-                except json.JSONDecodeError:
-                    pass # Ignore lines that are not valid JSON
+                except (json.JSONDecodeError, KeyError):
+                    pass # Ignore lines that are not valid JSON or missing fields
         process.wait()
 
         return video_info_list
@@ -101,11 +100,11 @@ def prompt_for_selection(video_list):
                     if 1 <= start <= end <= len(video_list):
                         selected_indices.update(range(start, end + 1))
                     else:
-                        print("Invalid range. Please enter valid numbers within the playlist.")
+                        print("Invalid range. Please enter valid numbers.")
                         valid_input = False
                         break
                 except ValueError:
-                    print("Invalid range format. Please use a valid number range (e.g., 5-8).")
+                    print("Invalid range format. Use numbers and a dash (e.g., 5-8).")
                     valid_input = False
                     break
             else:
@@ -114,11 +113,11 @@ def prompt_for_selection(video_list):
                     if 1 <= index <= len(video_list):
                         selected_indices.add(index)
                     else:
-                        print("Invalid number. Please select a valid number from the displayed list.")
+                        print("Invalid number. Please enter a valid number from the list.")
                         valid_input = False
                         break
                 except ValueError:
-                    print("Invalid input. Please enter numbers or 'all' to select all videos.")
+                    print("Invalid input. Please use numbers or 'all'.")
                     valid_input = False
                     break
         
@@ -126,7 +125,7 @@ def prompt_for_selection(video_list):
             return [video_list[i-1] for i in sorted(selected_indices)]
         else:
             if valid_input:
-                print("No videos were selected. Please try again with valid input.")
+                print("No videos selected. Please try again.")
 
 def download_videos(videos_to_download):
     """Downloads the selected videos."""
@@ -154,7 +153,7 @@ def download_videos(videos_to_download):
             if process.returncode == 0:
                 print(f"Download of '{video['title']}' completed successfully.")
             else:
-                print(f"Download of '{video['title']}' failed with return code: {process.returncode}.")
+                print(f"Download of '{video['title']}' failed.")
                 
         except Exception as e:
             print(f"An error occurred during download: {e}")
