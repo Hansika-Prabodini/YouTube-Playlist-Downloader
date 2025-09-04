@@ -4,9 +4,6 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source "$DIR/variables.sh"
 
-# try to merge from using VS code first time 
-# if it fails, just continue
-
 # Populate BUILD with the build command
 BUILD="poetry install"
 echo "Running build command: $BUILD"
