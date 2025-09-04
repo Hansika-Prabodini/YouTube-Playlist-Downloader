@@ -1,9 +1,10 @@
 [tool.poetry]
 name = "llm_benchmark"
 version = "0.1.0"
-description = "A collection of python functions to benchmark llm projects"
+description = "A collection of Python functions to benchmark LLM projects"
 authors = ["Matthew <matthew.truscott@turintech.ai>"]
 readme = "README.md"
+license = "MIT"
 
 [tool.poetry.scripts]
 main = "main:main"
@@ -20,5 +21,3 @@ pytest-benchmark = "^4.0.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-
-
