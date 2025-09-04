@@ -11,3 +11,13 @@ echo "Running build command: $BUILD"
 eval $BUILD
 
 # added new file for testing
+
+# 2 nd testing
+# try to merge from using VS code first time 
+# if it fails, just continue
+
+# Populate BUILD with the build command
+# try to merge from using VS code first time 
+# if it fails, just continue
+
+# Populate BUILD with the build command
