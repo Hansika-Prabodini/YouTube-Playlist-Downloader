@@ -10,7 +10,7 @@ def main():
     # Check if yt-dlp is installed
     try:
         subprocess.run(["yt-dlp", "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except FileNotFoundError:
+    except (FileNotFoundError, subprocess.CalledProcessError):
         print("Error: yt-dlp is not installed or not in your system's PATH.")
         print("Please install it by running: pip install yt-dlp")
         sys.exit(1)
@@ -45,10 +45,10 @@ def fetch_playlist_info(url):
             url
         ]
         
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
         video_info_list = []
-        for line in iter(process.stdout.readline, b''):
+        for line in iter(process.stdout.readline, ''):
             if line.strip():
                 try:
                     video_json = json.loads(line)
@@ -131,10 +131,11 @@ def download_videos(videos_to_download):
             command = ["yt-dlp", "--progress", video['url']]
             
             # Use Popen to show real-time progress
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False)
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             
-            for line in iter(process.stdout.readline, b''):
+            for line in iter(process.stdout.readline, ''):
                 sys.stdout.write(line)
+            sys.stdout.flush()
             
             process.communicate()  # Wait for the process to complete and free resources
             
