@@ -11,7 +11,7 @@ def main():
     try:
         subprocess.run(["yt-dlp", "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except (FileNotFoundError, subprocess.CalledProcessError):
-        print("Error: yt-dlp is not installed or not in your system's PATH.")
+        print("Error: yt-dlp is not installed or not in your system's PATH. Please install it by running: pip install yt-dlp")
         print("Please install it by running: pip install yt-dlp")
         sys.exit(1)
 
