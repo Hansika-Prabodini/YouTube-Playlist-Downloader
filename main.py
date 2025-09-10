@@ -7,12 +7,7 @@ from llm_benchmark.sql.query import SqlQuery
 from llm_benchmark.datastructures.dslist import DsList
 from llm_benchmark.strings.strops import StrOps
 
-# added these comments from CLI - Git bash
-# Just for testing 
-
-# change above imports to match your project structure
-# change main.py by adding comments
-# 1,2,3,-----start 
+# testing from bash
 
 def single():
     print("SingleForLoop")
