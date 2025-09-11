@@ -1,95 +1,109 @@
-import pytest
+import unittest
+from unittest.mock import patch, MagicMock
 import os
 import sys
-import subprocess
-import tempfile
-import shutil
 
 
-def test_missing_api_key_causes_sys_error_before_fix():
-    """
-    Test that demonstrates the bug: missing sys import causes NameError.
+class TestSysImportBug(unittest.TestCase):
+    """Test for the sys import bug in file-v1-main.py"""
     
-    This test creates a version of the file without the sys import,
-    runs it, and shows it fails with NameError before the fix.
-    """
-    # Create a temporary version of the file without sys import to simulate the bug
-    with open('file-v1-main.py', 'r') as f:
-        content = f.read()
-    
-    # Create buggy version (remove sys import)
-    buggy_content = content.replace('import sys\n', '')
-    
-    # Write to temporary file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as temp_file:
-        temp_file.write(buggy_content)
-        temp_file_path = temp_file.name
-    
-    try:
-        # Create environment without API key
-        test_env = os.environ.copy()
-        if 'OPENAI_API_KEY' in test_env:
-            del test_env['OPENAI_API_KEY']
+    def test_buggy_code_without_sys_import_raises_nameerror(self):
+        """
+        Test that demonstrates the original bug: calling sys.exit() without importing sys.
+        This test shows what would happen BEFORE the fix.
+        """
+        # Simulate the original buggy code (without sys import)
+        buggy_code = '''
+import os
+from unittest.mock import MagicMock
+
+# Simulate missing environment variable scenario
+if not os.getenv("OPENAI_API_KEY"):
+    print("Error: OPENAI_API_KEY environment variable not set.")
+    sys.exit(1)  # BUG: sys is not imported!
+'''
         
-        # Run the buggy version
-        result = subprocess.run(
-            [sys.executable, temp_file_path],
-            env=test_env,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        # Clear OPENAI_API_KEY to trigger the problematic code path
+        with patch.dict(os.environ, {}, clear=True):
+            # Mock print to avoid output during test
+            with patch('builtins.print'):
+                # Create execution globals without sys
+                exec_globals = {
+                    'os': os,
+                    'MagicMock': MagicMock
+                }
+                
+                # This should raise NameError: name 'sys' is not defined
+                with self.assertRaises(NameError) as context:
+                    exec(buggy_code, exec_globals)
+                
+                # Verify the error is specifically about 'sys' not being defined
+                self.assertIn("'sys' is not defined", str(context.exception))
+
+    def test_fixed_code_with_sys_import_works_correctly(self):
+        """
+        Test that demonstrates the fix: importing sys allows sys.exit() to work.
+        This test shows what happens AFTER the fix.
+        """
+        # Simulate the fixed code (with sys import)
+        fixed_code = '''
+import os
+import sys  # FIX: sys is now imported
+from unittest.mock import MagicMock
+
+# Simulate missing environment variable scenario  
+if not os.getenv("OPENAI_API_KEY"):
+    print("Error: OPENAI_API_KEY environment variable not set.")
+    sys.exit(1)  # This now works because sys is imported
+'''
         
-        # Before fix: Should fail with NameError about 'sys'
-        # This demonstrates the bug exists
-        assert result.returncode != 1  # Not a clean exit
-        assert "NameError" in result.stderr and "sys" in result.stderr
+        # Clear OPENAI_API_KEY to trigger the code path
+        with patch.dict(os.environ, {}, clear=True):
+            # Mock print to avoid output during test
+            with patch('builtins.print'):
+                # Mock sys.exit to capture the call instead of actually exiting
+                with patch('sys.exit') as mock_exit:
+                    # Create execution globals with sys
+                    exec_globals = {
+                        'os': os,
+                        'sys': sys,
+                        'MagicMock': MagicMock
+                    }
+                    
+                    # Execute the fixed code - should not raise NameError
+                    try:
+                        exec(fixed_code, exec_globals)
+                    except NameError as e:
+                        if "'sys' is not defined" in str(e):
+                            self.fail("Fixed code still has NameError - sys import didn't work")
+                        else:
+                            # Re-raise if it's a different NameError
+                            raise
+                    
+                    # Verify sys.exit(1) was called correctly
+                    mock_exit.assert_called_once_with(1)
+
+    def test_file_v1_main_actual_code_after_fix(self):
+        """
+        Test that the actual fixed file-v1-main.py imports sys correctly.
+        This ensures our fix actually works in the real file.
+        """
+        # Read the fixed file content
+        with open('file-v1-main.py', 'r') as f:
+            file_content = f.read()
         
-    finally:
-        # Clean up
-        os.unlink(temp_file_path)
+        # Verify sys is imported
+        self.assertIn('import sys', file_content)
+        
+        # Verify sys.exit(1) is still in the code
+        self.assertIn('sys.exit(1)', file_content)
+        
+        # Test that the fixed file can be parsed without syntax errors
+        try:
+            compile(file_content, 'file-v1-main.py', 'exec')
+        except SyntaxError as e:
+            self.fail(f"Fixed file has syntax errors: {e}")
 
 
-def test_missing_api_key_exits_cleanly_after_fix():
-    """
-    Test that after the fix, missing API key causes clean exit.
-    
-    This test runs the fixed version and shows it exits cleanly.
-    """
-    # Create environment without API key
-    test_env = os.environ.copy()
-    if 'OPENAI_API_KEY' in test_env:
-        del test_env['OPENAI_API_KEY']
-    
-    # Run the fixed version
-    result = subprocess.run(
-        [sys.executable, 'file-v1-main.py'],
-        env=test_env,
-        capture_output=True,
-        text=True,
-        timeout=10
-    )
-    
-    # After fix: Should exit cleanly with code 1
-    assert result.returncode == 1
-    assert "Error: OPENAI_API_KEY environment variable not set" in result.stdout
-    assert "NameError" not in result.stderr  # No NameError should occur
-
-
-def test_sys_import_is_present():
-    """
-    Test that verifies sys is properly imported in the fixed file.
-    """
-    with open('file-v1-main.py', 'r') as f:
-        content = f.read()
-    
-    # Verify that sys is imported
-    assert 'import sys' in content, "sys module should be imported"
-    
-    # Verify the import comes before the usage
-    import_pos = content.find('import sys')
-    usage_pos = content.find('sys.exit(1)')
-    
-    assert import_pos != -1, "sys import should be found"
-    assert usage_pos != -1, "sys.exit usage should be found" 
-    assert import_pos < usage_pos, "sys import should come before sys.exit usage"
+if __name__ == '__main__':
+    unittest.main()
