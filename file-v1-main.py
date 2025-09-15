@@ -1,4 +1,5 @@
 import os
+import sys
 from taipy.gui import Gui, State, notify
 import openai
 from dotenv import load_dotenv
@@ -11,12 +12,6 @@ DEFAULT_CONVERSATION = {
 
 # Global variables
 client = None
-context = DEFAULT_CONTEXT
-conversation = DEFAULT_CONVERSATION.copy()
-current_user_message = ""
-past_conversations = []
-selected_conv = None
-selected_row = [1]
 
 
 def on_init(state: State) -> None:
@@ -58,8 +53,9 @@ def request(state: State, prompt: str) -> str:
         )
         return response.choices[0].message.content
     except Exception as ex:
+        error_msg = f"API Error: {str(ex)}"
         on_exception(state, "request", ex)
-        return "Sorry, I encountered an error processing your request."
+        return f"Sorry, I encountered an error processing your request. {error_msg}"
 
 
 def update_context(state: State) -> str:
@@ -72,11 +68,19 @@ def update_context(state: State) -> str:
     Returns:
         The AI's response
     """
+    # Add user message to context
     state.context += f"Human: \n {state.current_user_message}\n\n AI:"
+    
+    # Get AI response
     answer = request(state, state.context)
-    # Only replace newlines in the context, not in the displayed answer
-    state.context += answer.replace("\n", "")
+    
+    # Add AI response to context (without newlines for context consistency)
+    context_answer = answer.replace("\n", " ")
+    state.context += context_answer
+    
+    # Update selected row to the new message
     state.selected_row = [len(state.conversation["Conversation"]) + 1]
+    
     return answer
 
 
@@ -156,30 +160,38 @@ def reset_chat(state: State) -> None:
     state.selected_row = [1]
 
 
-def tree_adapter(item: list) -> [str, str]:
+def tree_adapter(item: list) -> tuple[int, str]:
     """
     Converts element of past_conversations to id and displayed string
 
     Args:
-        item: element of past_conversations
+        item: element of past_conversations [id, conversation_dict]
 
     Returns:
-        id and displayed string
+        Tuple of (id, displayed_string)
     """
     identifier = item[0]
-    if len(item[1]["Conversation"]) > 3:
-        return (identifier, item[1]["Conversation"][2][:50] + "...")
-    return (item[0], "Empty conversation")
+    conversation = item[1]["Conversation"]
+    
+    # Check if there are any user messages beyond the default ones
+    if len(conversation) > 2:
+        # Get the first user message for the preview
+        first_user_message = conversation[2]
+        preview = first_user_message[:50]
+        if len(first_user_message) > 50:
+            preview += "..."
+        return (identifier, preview)
+    return (identifier, "Empty conversation")
 
 
 def select_conv(state: State, var_name: str, value) -> None:
     """
-    Selects conversation from past_conversations
+    Selects and loads a conversation from past_conversations
 
     Args:
         state: The current state of the app.
-        var_name: "selected_conv"
-        value: [[id, conversation]]
+        var_name: Name of the variable that changed (should be "selected_conv")
+        value: Selected value from the tree, format: [[id, conversation]]
     """
     if not value or len(value[0]) < 1:
         return
@@ -191,9 +203,14 @@ def select_conv(state: State, var_name: str, value) -> None:
     # Rebuild the context from the conversation history
     state.context = DEFAULT_CONTEXT
     for i in range(2, len(state.conversation["Conversation"]), 2):
-        state.context += f"Human: \n {state.conversation['Conversation'][i]}\n\n AI:"
-        state.context += state.conversation["Conversation"][i + 1].replace("\n", "")
+        user_message = state.conversation["Conversation"][i]
+        ai_response = state.conversation["Conversation"][i + 1]
+        
+        # Add to context with consistent formatting
+        state.context += f"Human: \n {user_message}\n\n AI:"
+        state.context += ai_response.replace("\n", " ")
     
+    # Select the last message
     state.selected_row = [len(state.conversation["Conversation"]) - 1]
 
 
@@ -229,10 +246,12 @@ if __name__ == "__main__":
         
     client = openai.Client(api_key=api_key)
 
-    # Start the GUI
-    Gui(page).run(
+    # Start the GUI with initial callback to set up state
+    gui = Gui(page)
+    gui.run(
         dark_mode=True, 
         debug=True, 
         use_reloader=True, 
-        title="💬 Taipy Chat"
+        title="💬 Taipy Chat",
+        on_init=on_init
     )
