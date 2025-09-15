@@ -11,6 +11,8 @@ DEFAULT_CONVERSATION = {
 
 # Global variables
 client = None
+api_key_available = False
+openai_client = None
 context = DEFAULT_CONTEXT
 conversation = DEFAULT_CONVERSATION.copy()
 current_user_message = ""
@@ -225,9 +227,13 @@ if __name__ == "__main__":
     if not api_key:
         print("Error: OPENAI_API_KEY environment variable not set.")
         print("Please set your API key in a .env file or environment variables.")
-        sys.exit(1)
+        api_key_available = False
+        openai_client = None
+    else:
+        openai_client = openai.Client(api_key=api_key)
+        api_key_available = True
         
-    client = openai.Client(api_key=api_key)
+    client = openai_client
 
     # Start the GUI
     Gui(page).run(
