@@ -29,12 +29,17 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.create_widgets()
 
         # --- Regular Expressions ---
-        # Compile regex once to avoid re-compilation for each download.
+        # Pre-compile all regex patterns once to avoid re-compilation overhead
         self.progress_regex = re.compile(r'\[download\]\s+(\d+\.\d+)%')
+        self.download_complete_regex = re.compile(r'\[download\] 100%')
+        self.extract_audio_regex = re.compile(r'\[ExtractAudio\] Destination:')
+        self.ffmpeg_regex = re.compile(r'\[ffmpeg\] Destination:')
+        self.merger_regex = re.compile(r'\[Merger\] Merging formats into')
 
         # --- Start monitoring downloads ---
         # This function will periodically check the status of all active downloads
-        self.after(100, self.monitor_downloads)
+        # Optimized: Reduced frequency from 100ms to 500ms to reduce CPU overhead
+        self.after(500, self.monitor_downloads)
 
     def create_widgets(self):
         # Header Frame: Contains URL input and Load button
@@ -290,10 +295,13 @@ class YouTubeDownloaderApp(ctk.CTk):
         """Executes the yt-dlp command for a single video."""
         widgets = self.video_widgets[video_url]
         # Use deque to store only the last N lines of output.
-        # This limits memory usage, especially for verbose yt-dlp output,
-        # while still providing sufficient context for error messages.
-        MAX_ERROR_CONTEXT_LINES = 50 
+        # Optimized: Reduced buffer size to minimize memory usage
+        MAX_ERROR_CONTEXT_LINES = 20  # Reduced from 50 to 20 for better memory efficiency
         full_output_buffer = deque(maxlen=MAX_ERROR_CONTEXT_LINES)
+        
+        # Performance optimization: batch UI updates to reduce GUI thread load
+        last_ui_update = 0
+        ui_update_interval = 0.1  # Update UI at most every 100ms
         
         try:
             # Base command arguments
@@ -319,6 +327,7 @@ class YouTubeDownloaderApp(ctk.CTk):
             self.download_processes[video_url] = process
             
             # Read output in a loop to update progress
+            import time
             for line in process.stdout:
                 if not line:
                     break
@@ -329,16 +338,24 @@ class YouTubeDownloaderApp(ctk.CTk):
                 if process.poll() is not None and line.strip() == '':
                     break
 
+                # Optimize UI updates to reduce GUI thread load
+                current_time = time.time()
+                should_update_ui = (current_time - last_ui_update) >= ui_update_interval
+                
                 match = self.progress_regex.search(line)
-                if match:
+                if match and should_update_ui:
                     try:
                         percentage = float(match.group(1)) / 100.0
                         self.after(0, lambda p=percentage: widgets['progress_bar'].set(p))
                         self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
+                        last_ui_update = current_time
                     except (ValueError, IndexError):
-                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
-                else:
+                        if should_update_ui:
+                            self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
+                            last_ui_update = current_time
+                elif should_update_ui:
                     self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
+                    last_ui_update = current_time
             
             process.wait()
 
@@ -349,10 +366,11 @@ class YouTubeDownloaderApp(ctk.CTk):
             if process.returncode == 0:
                 is_success = True
             else:
-                if (re.search(r'\[download\] 100%', combined_output_str) or
-                    re.search(r'\[ExtractAudio\] Destination:', combined_output_str) or
-                    re.search(r'\[ffmpeg\] Destination:', combined_output_str) or
-                    re.search(r'\[Merger\] Merging formats into', combined_output_str)):
+                # Use pre-compiled regex patterns for better performance
+                if (self.download_complete_regex.search(combined_output_str) or
+                    self.extract_audio_regex.search(combined_output_str) or
+                    self.ffmpeg_regex.search(combined_output_str) or
+                    self.merger_regex.search(combined_output_str)):
                     is_success = True
             
             if is_success:
@@ -422,8 +440,8 @@ class YouTubeDownloaderApp(ctk.CTk):
         # We just need to check if there are any processes left to decide global button state
         self._check_global_buttons_state()
 
-        # Reschedule the next check
-        self.after(100, self.monitor_downloads)
+        # Reschedule the next check with optimized interval
+        self.after(500, self.monitor_downloads)
 
     def _check_global_buttons_state(self):
         """Helper to enable/disable global Download All/Cancel All buttons."""
