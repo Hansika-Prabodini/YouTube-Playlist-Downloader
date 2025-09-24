@@ -1,4 +1,5 @@
 # added single.py for the testing purpose
+from llm_benchmark.control.single import SingleForLoop
 
 def single():
     print("SingleForLoop")

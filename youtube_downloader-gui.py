@@ -409,8 +409,8 @@ class YouTubeDownloaderApp(ctk.CTk):
             process.terminate()
             # The run_download's finally block for each video will handle its cleanup.
             widgets = self.video_widgets[video_url]
-            self.after(0, lambda: (widgets['status_label'].configure(text="Cancelling..."),
-                                    widgets['progress_bar'].set(0))) # Reset progress bar immediately
+            self.after(0, lambda w=widgets: (w['status_label'].configure(text="Cancelling..."),
+                                    w['progress_bar'].set(0))) # Reset progress bar immediately
 
         # Global buttons will be reset by _check_global_buttons_state once all processes terminate
 
