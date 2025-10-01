@@ -1,10 +1,16 @@
-#!/bin/bash     
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Import variables
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-source "$DIR/variables.sh"
+# Simple build script for this project
+# - Installs dependencies using Poetry
+# - No external variables or scripts required
 
-# Populate BUILD with the build command
-BUILD="poetry install"
-echo "Running build command: $BUILD"
-eval "$BUILD"
+if ! command -v poetry >/dev/null 2>&1; then
+  echo "Error: Poetry is not installed. Please install it from https://python-poetry.org/docs/#installation" >&2
+  exit 1
+fi
+
+echo "Installing dependencies with Poetry..."
+poetry install
+
+echo "Build completed successfully."

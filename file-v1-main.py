@@ -1,33 +1,37 @@
 import os
-from taipy.gui import Gui, State, notify
-import openai
+from typing import Any, List, Optional, Tuple
+
 from dotenv import load_dotenv
+import openai
+from taipy.gui import Gui, State, notify
 
 # Default conversation values
-DEFAULT_CONTEXT = "The following is a conversation with an AI assistant. The assistant is helpful, creative, clever, and very friendly.\n\nHuman: Hello, who are you?\nAI: I am an AI created by OpenAI. How can I help you today? "
+DEFAULT_CONTEXT = (
+    "The following is a conversation with an AI assistant. The assistant is "
+    "helpful, creative, clever, and very friendly.\n\n"
+    "Human: Hello, who are you?\n"
+    "AI: I am an AI created by OpenAI. How can I help you today? "
+)
 DEFAULT_CONVERSATION = {
-    "Conversation": ["Who are you?", "Hi! I am GPT-4. How can I help you today?"]
+    "Conversation": [
+        "Who are you?",
+        "Hi! I am GPT-4. How can I help you today?",
+    ]
 }
 
 # Global variables
-client = None
-api_key_available = False
-openai_client = None
+MODEL_NAME = "gpt-4-turbo-preview"
+client: Optional[Any] = None
 context = DEFAULT_CONTEXT
 conversation = DEFAULT_CONVERSATION.copy()
 current_user_message = ""
-past_conversations = []
+past_conversations: List[Any] = []
 selected_conv = None
 selected_row = [1]
 
 
 def on_init(state: State) -> None:
-    """
-    Initialize the app.
-
-    Args:
-        state: The current state of the app.
-    """
+    """Initialize the app and state defaults."""
     state.context = DEFAULT_CONTEXT
     state.conversation = DEFAULT_CONVERSATION.copy()
     state.current_user_message = ""
@@ -38,41 +42,30 @@ def on_init(state: State) -> None:
 
 
 def request(state: State, prompt: str) -> str:
-    """
-    Send a prompt to the GPT-4 API and return the response.
+    """Send a prompt to the OpenAI API and return the response text.
 
     Args:
-        state: The current state of the app.
+        state: The current state of the app (provides the OpenAI client).
         prompt: The prompt to send to the API.
 
     Returns:
-        The response from the API.
+        The response message content from the API, or an error string on failure.
     """
     try:
         response = state.client.chat.completions.create(
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
-            model="gpt-4-turbo-preview",
+            messages=[{"role": "user", "content": prompt}],
+            model=MODEL_NAME,
         )
         return response.choices[0].message.content
-    except Exception as ex:
+    except Exception as ex:  # noqa: BLE001 - surface errors to the UI in a friendly way
         on_exception(state, "request", ex)
         return "Sorry, I encountered an error processing your request."
 
 
 def update_context(state: State) -> str:
-    """
-    Update the context with the user's message and the AI's response.
+    """Update the context with the user's message and the AI's response.
 
-    Args:
-        state: The current state of the app.
-
-    Returns:
-        The AI's response
+    Returns the AI's response text.
     """
     state.context += f"Human: \n {state.current_user_message}\n\n AI:"
     answer = request(state, state.context)
@@ -83,119 +76,75 @@ def update_context(state: State) -> str:
 
 
 def send_message(state: State) -> None:
-    """
-    Send the user's message to the API and update the context.
-
-    Args:
-        state: The current state of the app.
-    """
-    # Don't process empty messages
+    """Send the user's message, update the conversation, and notify the user."""
     if not state.current_user_message.strip():
         notify(state, "warning", "Please enter a message")
         return
-        
+
     try:
         notify(state, "info", "Sending message...")
         answer = update_context(state)
-        conv = state.conversation._dict.copy()
+        # Avoid relying on private attributes that may not exist on plain dicts
+        conv = state.conversation.copy()
         conv["Conversation"] += [state.current_user_message, answer]
         state.current_user_message = ""
         state.conversation = conv
         notify(state, "success", "Response received!")
-    except Exception as ex:
+    except Exception as ex:  # noqa: BLE001
         on_exception(state, "send_message", ex)
 
 
-def style_conv(state: State, idx: int, row: int) -> str:
-    """
-    Apply a style to the conversation table depending on the message's author.
-
-    Args:
-        - state: The current state of the app.
-        - idx: The index of the message in the table.
-        - row: The row of the message in the table.
-
-    Returns:
-        The style to apply to the message.
-    """
+def style_conv(state: State, idx: Optional[int], row: int) -> Optional[str]:
+    """Return a style for the conversation table depending on the author."""
     if idx is None:
         return None
-    elif idx % 2 == 0:
-        return "user_message"
-    else:
-        return "gpt_message"
+    return "user_message" if idx % 2 == 0 else "gpt_message"
 
 
-def on_exception(state, function_name: str, ex: Exception) -> None:
-    """
-    Catches exceptions and notifies user in Taipy GUI
-
-    Args:
-        state (State): Taipy GUI state
-        function_name (str): Name of function where exception occured
-        ex (Exception): Exception
-    """
-    notify(state, "error", f"An error occured in {function_name}: {ex}")
+def on_exception(state: State, function_name: str, ex: Exception) -> None:
+    """Catch exceptions and notify the user in the Taipy GUI."""
+    notify(state, "error", f"An error occurred in {function_name}: {ex}")
 
 
 def reset_chat(state: State) -> None:
-    """
-    Reset the chat by saving current conversation and starting a new one.
-
-    Args:
-        state: The current state of the app.
-    """
-    # Only save non-empty conversations
+    """Save the current conversation (if non-empty) and start a new one."""
     if len(state.conversation["Conversation"]) > 2:
-        state.past_conversations.append([
-            len(state.past_conversations), 
-            state.conversation
-        ])
-        
-    # Reset to default conversation
+        state.past_conversations.append(
+            [len(state.past_conversations), state.conversation]
+        )
+
     state.conversation = DEFAULT_CONVERSATION.copy()
     state.context = DEFAULT_CONTEXT
     state.selected_row = [1]
 
 
-def tree_adapter(item: list) -> [str, str]:
-    """
-    Converts element of past_conversations to id and displayed string
-
-    Args:
-        item: element of past_conversations
-
-    Returns:
-        id and displayed string
-    """
-    identifier = item[0]
+def tree_adapter(item: list) -> Tuple[str, str]:
+    """Convert an element of past_conversations to an id and display string."""
+    identifier = str(item[0])
     if len(item[1]["Conversation"]) > 3:
         return (identifier, item[1]["Conversation"][2][:50] + "...")
-    return (item[0], "Empty conversation")
+    return (identifier, "Empty conversation")
 
 
-def select_conv(state: State, var_name: str, value) -> None:
-    """
-    Selects conversation from past_conversations
-
-    Args:
-        state: The current state of the app.
-        var_name: "selected_conv"
-        value: [[id, conversation]]
-    """
-    if not value or len(value[0]) < 1:
+def select_conv(state: State, var_name: str, value: Any) -> None:
+    """Select a conversation from past_conversations based on tree selection."""
+    if not value or not value[0] or len(value[0]) < 1:
         return
-        
+
     # Retrieve the selected conversation
     conv_id = value[0][0]
     state.conversation = state.past_conversations[conv_id][1]
-    
+
     # Rebuild the context from the conversation history
     state.context = DEFAULT_CONTEXT
     for i in range(2, len(state.conversation["Conversation"]), 2):
-        state.context += f"Human: \n {state.conversation['Conversation'][i]}\n\n AI:"
-        state.context += state.conversation["Conversation"][i + 1].replace("\n", "")
-    
+        state.context += (
+            f"Human: \n {state.conversation['Conversation'][i]}\n\n AI:"
+        )
+        state.context += state.conversation["Conversation"][i + 1].replace(
+            "\n", ""
+        )
+
     state.selected_row = [len(state.conversation["Conversation"]) - 1]
 
 
@@ -223,22 +172,18 @@ if __name__ == "__main__":
     # Load environment variables and initialize OpenAI client
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
-    
+
     if not api_key:
         print("Error: OPENAI_API_KEY environment variable not set.")
         print("Please set your API key in a .env file or environment variables.")
-        api_key_available = False
-        openai_client = None
+        client = None
     else:
-        openai_client = openai.Client(api_key=api_key)
-        api_key_available = True
-        
-    client = openai_client
+        client = openai.Client(api_key=api_key)
 
     # Start the GUI
     Gui(page).run(
-        dark_mode=True, 
-        debug=True, 
-        use_reloader=True, 
-        title="💬 Taipy Chat"
+        dark_mode=True,
+        debug=True,
+        use_reloader=True,
+        title="💬 Taipy Chat",
     )
