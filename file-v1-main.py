@@ -1,7 +1,32 @@
 import os
-from taipy.gui import Gui, State, notify
-import openai
-from dotenv import load_dotenv
+
+# Optional dependencies: provide safe fallbacks so this module can be imported in test envs
+try:
+    from taipy.gui import Gui, State, notify  # type: ignore
+except Exception:  # ImportError or runtime issues
+    class State:  # minimal stub for typing/usage in tests
+        pass
+
+    class Gui:  # minimal stub
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def run(self, *args, **kwargs):
+            raise RuntimeError("Taipy GUI is not available in this environment.")
+
+    def notify(state, kind, message):  # no-op fallback
+        return None
+
+try:
+    import openai  # type: ignore
+except Exception:
+    openai = None  # type: ignore
+
+try:
+    from dotenv import load_dotenv  # type: ignore
+except Exception:
+    def load_dotenv():
+        return None
 
 # Default conversation values
 DEFAULT_CONTEXT = "The following is a conversation with an AI assistant. The assistant is helpful, creative, clever, and very friendly.\n\nHuman: Hello, who are you?\nAI: I am an AI created by OpenAI. How can I help you today? "
@@ -97,7 +122,8 @@ def send_message(state: State) -> None:
     try:
         notify(state, "info", "Sending message...")
         answer = update_context(state)
-        conv = state.conversation._dict.copy()
+        # Use standard dict copy to avoid AttributeError on plain dicts
+        conv = state.conversation.copy()
         conv["Conversation"] += [state.current_user_message, answer]
         state.current_user_message = ""
         state.conversation = conv
