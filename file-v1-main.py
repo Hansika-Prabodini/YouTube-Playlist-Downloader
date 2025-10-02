@@ -3,7 +3,13 @@ from taipy.gui import Gui, State, notify
 import openai
 from dotenv import load_dotenv
 
+# Configuration constants
+MODEL_NAME = "gpt-4-turbo-preview"
+MAX_PREVIEW_LENGTH = 50
+
 # Default conversation values
+# Conversation structure: ["Who are you?", "AI response", "user msg 2", "AI response 2", ...]
+# Index 0, 2, 4... are user messages; Index 1, 3, 5... are AI responses
 DEFAULT_CONTEXT = "The following is a conversation with an AI assistant. The assistant is helpful, creative, clever, and very friendly.\n\nHuman: Hello, who are you?\nAI: I am an AI created by OpenAI. How can I help you today? "
 DEFAULT_CONVERSATION = {
     "Conversation": ["Who are you?", "Hi! I am GPT-4. How can I help you today?"]
@@ -11,8 +17,6 @@ DEFAULT_CONVERSATION = {
 
 # Global variables
 client = None
-api_key_available = False
-openai_client = None
 context = DEFAULT_CONTEXT
 conversation = DEFAULT_CONVERSATION.copy()
 current_user_message = ""
@@ -22,8 +26,7 @@ selected_row = [1]
 
 
 def on_init(state: State) -> None:
-    """
-    Initialize the app.
+    """Initialize the app.
 
     Args:
         state: The current state of the app.
@@ -38,8 +41,7 @@ def on_init(state: State) -> None:
 
 
 def request(state: State, prompt: str) -> str:
-    """
-    Send a prompt to the GPT-4 API and return the response.
+    """Send a prompt to the GPT-4 API and return the response.
 
     Args:
         state: The current state of the app.
@@ -56,7 +58,7 @@ def request(state: State, prompt: str) -> str:
                     "content": prompt,
                 }
             ],
-            model="gpt-4-turbo-preview",
+            model=MODEL_NAME,
         )
         return response.choices[0].message.content
     except Exception as ex:
@@ -64,15 +66,33 @@ def request(state: State, prompt: str) -> str:
         return "Sorry, I encountered an error processing your request."
 
 
-def update_context(state: State) -> str:
+def build_context_from_conversation(conversation_list: list) -> str:
+    """Build context string from conversation history.
+
+    Args:
+        conversation_list: List of conversation messages (alternating user/AI).
+
+    Returns:
+        Formatted context string.
     """
-    Update the context with the user's message and the AI's response.
+    context = DEFAULT_CONTEXT
+    # Start from index 2 (first real user message after initial greeting)
+    for i in range(2, len(conversation_list), 2):
+        user_msg = conversation_list[i]
+        ai_response = conversation_list[i + 1] if i + 1 < len(conversation_list) else ""
+        context += f"Human: \n {user_msg}\n\n AI:"
+        context += ai_response.replace("\n", "")
+    return context
+
+
+def update_context(state: State) -> str:
+    """Update the context with the user's message and the AI's response.
 
     Args:
         state: The current state of the app.
 
     Returns:
-        The AI's response
+        The AI's response.
     """
     state.context += f"Human: \n {state.current_user_message}\n\n AI:"
     answer = request(state, state.context)
@@ -83,8 +103,7 @@ def update_context(state: State) -> str:
 
 
 def send_message(state: State) -> None:
-    """
-    Send the user's message to the API and update the context.
+    """Send the user's message to the API and update the context.
 
     Args:
         state: The current state of the app.
@@ -107,45 +126,44 @@ def send_message(state: State) -> None:
 
 
 def style_conv(state: State, idx: int, row: int) -> str:
-    """
-    Apply a style to the conversation table depending on the message's author.
+    """Apply a style to the conversation table depending on the message's author.
 
     Args:
-        - state: The current state of the app.
-        - idx: The index of the message in the table.
-        - row: The row of the message in the table.
+        state: The current state of the app.
+        idx: The index of the message in the table.
+        row: The row of the message in the table.
 
     Returns:
         The style to apply to the message.
     """
     if idx is None:
         return None
+    # Even indices (0, 2, 4...) are user messages
     elif idx % 2 == 0:
         return "user_message"
+    # Odd indices (1, 3, 5...) are AI messages
     else:
         return "gpt_message"
 
 
-def on_exception(state, function_name: str, ex: Exception) -> None:
-    """
-    Catches exceptions and notifies user in Taipy GUI
+def on_exception(state: State, function_name: str, ex: Exception) -> None:
+    """Catch exceptions and notify user in Taipy GUI.
 
     Args:
-        state (State): Taipy GUI state
-        function_name (str): Name of function where exception occured
-        ex (Exception): Exception
+        state: Taipy GUI state.
+        function_name: Name of function where exception occurred.
+        ex: The exception that was raised.
     """
-    notify(state, "error", f"An error occured in {function_name}: {ex}")
+    notify(state, "error", f"An error occurred in {function_name}: {ex}")
 
 
 def reset_chat(state: State) -> None:
-    """
-    Reset the chat by saving current conversation and starting a new one.
+    """Reset the chat by saving current conversation and starting a new one.
 
     Args:
         state: The current state of the app.
     """
-    # Only save non-empty conversations
+    # Only save non-empty conversations (more than the default greeting)
     if len(state.conversation["Conversation"]) > 2:
         state.past_conversations.append([
             len(state.past_conversations), 
@@ -158,30 +176,31 @@ def reset_chat(state: State) -> None:
     state.selected_row = [1]
 
 
-def tree_adapter(item: list) -> [str, str]:
-    """
-    Converts element of past_conversations to id and displayed string
+def tree_adapter(item: list) -> tuple[str, str]:
+    """Convert element of past_conversations to id and displayed string.
 
     Args:
-        item: element of past_conversations
+        item: Element of past_conversations [id, conversation_dict].
 
     Returns:
-        id and displayed string
+        Tuple of (identifier, display_string).
     """
     identifier = item[0]
-    if len(item[1]["Conversation"]) > 3:
-        return (identifier, item[1]["Conversation"][2][:50] + "...")
-    return (item[0], "Empty conversation")
+    conversation_list = item[1]["Conversation"]
+    # Index 2 is the first real user message (after initial greeting)
+    if len(conversation_list) > 2:
+        preview_text = conversation_list[2][:MAX_PREVIEW_LENGTH]
+        return (identifier, f"{preview_text}...")
+    return (identifier, "Empty conversation")
 
 
 def select_conv(state: State, var_name: str, value) -> None:
-    """
-    Selects conversation from past_conversations
+    """Select conversation from past_conversations.
 
     Args:
         state: The current state of the app.
-        var_name: "selected_conv"
-        value: [[id, conversation]]
+        var_name: Variable name (should be "selected_conv").
+        value: Selected conversation data [[id, conversation]].
     """
     if not value or len(value[0]) < 1:
         return
@@ -190,11 +209,8 @@ def select_conv(state: State, var_name: str, value) -> None:
     conv_id = value[0][0]
     state.conversation = state.past_conversations[conv_id][1]
     
-    # Rebuild the context from the conversation history
-    state.context = DEFAULT_CONTEXT
-    for i in range(2, len(state.conversation["Conversation"]), 2):
-        state.context += f"Human: \n {state.conversation['Conversation'][i]}\n\n AI:"
-        state.context += state.conversation["Conversation"][i + 1].replace("\n", "")
+    # Rebuild the context from the conversation history using helper function
+    state.context = build_context_from_conversation(state.conversation["Conversation"])
     
     state.selected_row = [len(state.conversation["Conversation"]) - 1]
 
@@ -227,13 +243,9 @@ if __name__ == "__main__":
     if not api_key:
         print("Error: OPENAI_API_KEY environment variable not set.")
         print("Please set your API key in a .env file or environment variables.")
-        api_key_available = False
-        openai_client = None
+        client = None
     else:
-        openai_client = openai.Client(api_key=api_key)
-        api_key_available = True
-        
-    client = openai_client
+        client = openai.Client(api_key=api_key)
 
     # Start the GUI
     Gui(page).run(
