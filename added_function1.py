@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 def send_message(state: State) -> None:
     """
     Send the user's message to the API and update the context.
