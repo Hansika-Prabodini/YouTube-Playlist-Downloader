@@ -9,9 +9,16 @@ from llm_benchmark.strings.strops import StrOps
 
 # testing 01 
 
+def print_section_header(title):
+    """Prints a formatted section header."""
+    print(title)
+    print("-" * len(title))
+    # Add an extra newline for better spacing after the header
+    print()
+
+
 def single():
-    print("SingleForLoop")
-    print("-------------")
+    print_section_header("SingleForLoop")
 
     print(f"sum_range(10): {SingleForLoop.sum_range(10)}")
     print(f"max_list([1, 2, 3]): {SingleForLoop.max_list([1, 2, 3])}")
@@ -20,35 +27,38 @@ def single():
 
 
 def double():
-    print("DoubleForLoop")
-    print("-------------")
+    print_section_header("DoubleForLoop")
 
     print(f"sum_square(10): {DoubleForLoop.sum_square(10)}")
     print(f"sum_triangle(10): {DoubleForLoop.sum_triangle(10)}")
+
+    # Store generated list to avoid re-generating for printing and calculation
+    list_for_pairs = GenList.random_list(30, 10)
+    print(f"count_pairs({list_for_pairs}): {DoubleForLoop.count_pairs(list_for_pairs)}")
+
+    # Store generated lists to avoid re-generating and for clear output
+    list1_for_duplicates = GenList.random_list(10, 2)
+    list2_for_duplicates = GenList.random_list(10, 2)
     print(
-        f"count_pairs(random_list(30, 10)): {DoubleForLoop.count_pairs(GenList.random_list(30, 10))}"
+        f"count_duplicates({list1_for_duplicates}, {list2_for_duplicates}): "
+        f"{DoubleForLoop.count_duplicates(list1_for_duplicates, list2_for_duplicates)}"
     )
-    print(
-        "count_duplicates(10, 10)",
-        DoubleForLoop.count_duplicates(
-            GenList.random_list(10, 2), GenList.random_list(10, 2)
-        ),
-    )
-    print(
-        f"sum_matrix(random_matrix(10, 10)): {DoubleForLoop.sum_matrix(GenList.random_matrix(10, 10))}"
-    )
+
+    # Store generated matrix to avoid re-generating
+    matrix_for_sum = GenList.random_matrix(10, 10)
+    print(f"sum_matrix({matrix_for_sum}): {DoubleForLoop.sum_matrix(matrix_for_sum)}")
     print()
 
 
 def sql():
-    print("SQL")
-    print("---")
+    print_section_header("SQL")
 
     print(f"query_album('Presence'): {SqlQuery.query_album('Presence')}")
     print(f"query_album('Roundabout'): {SqlQuery.query_album('Roundabout')}")
     print()
 
     print("join_albums()")
+    # Assuming the intent is to show only the first result for brevity
     print(SqlQuery.join_albums()[0])
     print()
 
@@ -57,8 +67,7 @@ def sql():
     print()
 
 def primes():
-    print("Primes")
-    print("------")
+    print_section_header("Primes")
 
     print(f"is_prime(1700): {Primes.is_prime_ineff(1700)}")
     print(f"sum_primes(210): {Primes.sum_primes(210)}")
@@ -66,52 +75,58 @@ def primes():
     print()
 
 def sort():
-    print("Sort")
-    print("----")
+    print_section_header("Sort")
 
-    v = [5, 3, 2, 1, 4]
-    print(f"sort_list({v}): ", end="")
-    Sort.sort_list(v)
-    print(v)
+    # Demonstrate in-place sort, showing the original list for clarity
+    v_sort = [5, 3, 2, 1, 4]
+    original_v_sort = list(v_sort) # Make a copy to display original input
+    Sort.sort_list(v_sort)
+    print(f"sort_list({original_v_sort}): {v_sort}")
 
-    v = [5, 3, 2, 1, 4]
-    print(f"dutch_flag_partition({v}, 3): ", end="")
-    Sort.dutch_flag_partition(v, 3)
-    print(v)
+    # Demonstrate in-place dutch flag partition
+    v_dutch = [5, 3, 2, 1, 4]
+    original_v_dutch = list(v_dutch) # Make a copy to display original input
+    Sort.dutch_flag_partition(v_dutch, 3)
+    print(f"dutch_flag_partition({original_v_dutch}, 3): {v_dutch}")
 
-    v = [5, 3, 2, 1, 4]
-    print(f"max_n({v}, 3): {Sort.max_n(v, 3)}")
+    # Demonstrate max_n which returns a new list
+    v_max_n = [5, 3, 2, 1, 4]
+    print(f"max_n({v_max_n}, 3): {Sort.max_n(v_max_n, 3)}")
     print()
 
 
 def dslist():
-    print("DsList")
-    print("----")
+    print_section_header("DsList")
 
-    test_list = [1, 2, 3, 4, 5]
-    print("Original list:", test_list)
+    # Use an original list and pass copies to operations that might modify in-place
+    # or if the operation returns a new list, the original_test_list remains untouched.
+    original_test_list = [1, 2, 3, 4, 5]
+    print("Original list:", original_test_list)
 
-    modified_list = DsList.modify_list(test_list)
+    # Assuming modify_list returns a new list or modifies a copy
+    modified_list = DsList.modify_list(list(original_test_list)) 
     print("Modified list:", modified_list)
 
-    search_result = DsList.search_list(test_list, 3)
-    print("Search result for 3:", search_result)
+    # Subsequent operations are performed on the original_test_list or its copy for clarity
+    search_result = DsList.search_list(original_test_list, 3)
+    print(f"Search result for 3 in {original_test_list}: {search_result}")
 
-    sorted_list = DsList.sort_list(test_list)
-    print("Sorted list:", sorted_list)
+    sorted_list = DsList.sort_list(list(original_test_list))
+    print(f"Sorted list from {original_test_list}: {sorted_list}")
 
-    reversed_list = DsList.reverse_list(test_list)
-    print("Reversed list:", reversed_list)
+    reversed_list = DsList.reverse_list(list(original_test_list))
+    print(f"Reversed list from {original_test_list}: {reversed_list}")
 
-    rotated_list = DsList.rotate_list(test_list, 2)
-    print("Rotated list by 2 positions:", rotated_list)
+    rotated_list = DsList.rotate_list(list(original_test_list), 2)
+    print(f"Rotated list from {original_test_list} by 2 positions: {rotated_list}")
 
-    merged_list = DsList.merge_lists(test_list, [6, 7, 8])
-    print("Merged list with [6, 7, 8]:", merged_list)
+    list_to_merge = [6, 7, 8]
+    merged_list = DsList.merge_lists(list(original_test_list), list_to_merge)
+    print(f"Merged list with {original_test_list} and {list_to_merge}: {merged_list}")
+    print()
 
 def strops():
-    print("Strops")
-    print("----")
+    print_section_header("Strops")
 
     test_str = "racecar"
     print("Original string:", test_str)
@@ -121,6 +136,7 @@ def strops():
 
     is_palindrome = StrOps.palindrome(test_str)
     print("Is palindrome:", is_palindrome)
+    print() # Add a newline for consistency
 
 
 def main():
