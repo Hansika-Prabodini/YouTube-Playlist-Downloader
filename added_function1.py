@@ -20,5 +20,5 @@ def send_message(state: State) -> None:
         state.current_user_message = ""
         state.conversation = conv
         notify(state, "success", "Response received!")
-    except Exception as ex:
+    except (AttributeError, KeyError, TypeError) as ex:
         on_exception(state, "send_message", ex)
