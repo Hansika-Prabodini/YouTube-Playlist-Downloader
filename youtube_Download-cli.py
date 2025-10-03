@@ -106,7 +106,7 @@ def fetch_playlist_info(url: str) -> List[Dict[str, str]]:
             print(f"yt-dlp exited with code {return_code}")
             return []
 
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         print(ERROR_FETCH_INFO.format(e))
         return []
 
