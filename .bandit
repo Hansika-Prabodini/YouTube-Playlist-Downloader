@@ -1,0 +1,57 @@
+# Bandit Configuration File
+# Security linting configuration for Python code
+
+[bandit]
+# Directories to exclude from scanning
+exclude_dirs = 
+    /tests/
+    /venv/
+    /.venv/
+    /build/
+    /dist/
+    /.eggs/
+
+# Test IDs to run
+# See: https://bandit.readthedocs.io/en/latest/plugins/index.html
+tests = 
+    # B201: flask_debug_true
+    B201,
+    # B301-308: Dangerous function usage
+    B301, B302, B303, B304, B305, B306, B307, B308,
+    # B310-313: Network and parsing issues
+    B310, B311, B312, B313,
+    # B314-320: XML and pickle vulnerabilities
+    B314, B315, B316, B317, B318, B319, B320,
+    # B321-324: Network and crypto issues
+    B321, B323, B324,
+    # B501-507: SSL/TLS and crypto issues
+    B501, B502, B503, B504, B505, B506, B507,
+    # B601-610: Injection vulnerabilities
+    B601, B602, B603, B604, B605, B606, B607, B608, B609, B610
+
+# Skipped tests (with reasoning)
+skips = 
+    # B101: assert_used - asserts are okay in test files
+    # B404: import_subprocess - subprocess is needed for yt-dlp
+    # B603: subprocess_without_shell_equals_true - we validate this manually
+
+# Severity levels to report
+# Values: LOW, MEDIUM, HIGH
+# Report medium and high severity issues
+severity = MEDIUM
+
+# Confidence levels to report
+# Values: LOW, MEDIUM, HIGH
+confidence = MEDIUM
+
+# Output format
+# Options: csv, custom, html, json, screen, txt, xml, yaml
+# Use 'screen' for human-readable output
+# format = screen
+
+# Exclude specific files (optional)
+# exclude = /path/to/file.py
+
+# Custom baseline (optional)
+# If you have a bandit baseline file from a previous run:
+# baseline = bandit_baseline.json

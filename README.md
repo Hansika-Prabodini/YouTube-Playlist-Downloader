@@ -131,8 +131,30 @@ flowchart TD
     A -. static asset .-> K
 ```
 
+## Security
+
+Security is important to us. Please see our security documentation:
+
+- **[SECURITY.md](SECURITY.md)** - Security policy and how to report vulnerabilities
+- **[SECURITY_RECOMMENDATIONS.md](SECURITY_RECOMMENDATIONS.md)** - Detailed security assessment and recommendations
+- **[SECURITY_CHECKLIST.md](SECURITY_CHECKLIST.md)** - Implementation checklist for security improvements
+
+### Quick Security Tips
+
+1. **API Keys**: Never commit API keys. Use `.env` files (see `.env.example`)
+2. **Dependencies**: Keep dependencies updated with `poetry update`
+3. **Validation**: Always validate URLs and user input
+4. **Production**: Disable debug mode in production (`DEBUG=false` in `.env`)
+
+Run security checks:
+```bash
+poetry add --group dev safety bandit
+poetry run safety check
+poetry run bandit -r . -ll
+```
+
 ## Contributing
-Contributions are welcome! Please see CONTRIBUTING.md for guidelines on development, testing, benchmarking, and submitting pull requests.
+Contributions are welcome! Please see CONTRIBUTING.md for guidelines on development, testing, benchmarking, security best practices, and submitting pull requests.
 
 ## License
 MIT. See the license declaration in `pyproject.toml`.

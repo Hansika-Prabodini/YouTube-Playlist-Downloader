@@ -1,0 +1,99 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv
+.env.backup
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets.json
+credentials.json
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+*.cover
+.hypothesis/
+
+# Poetry
+# Uncomment if you want to exclude the lock file
+# poetry.lock
+
+# Project-specific
+variables.sh
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Downloaded files (YouTube downloaders)
+*.mp4
+*.mp3
+*.webm
+*.mkv
+*.wav
+*.flac
+*.m4a
+
+# Taipy
+.taipy/
+*.taipy
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Security and audit logs
+app_security.log
+audit.log
+security-reports/
+bandit-report.json

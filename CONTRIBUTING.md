@@ -78,5 +78,69 @@ When contributing to the `llm_benchmark` examples or adding new benchmark target
 - Include steps to reproduce, expected vs actual behavior, and environment details.
 - For benchmark regressions, include the benchmark output and commit baseline if available.
 
+## Security Considerations
+
+Security is a critical aspect of software development. When contributing code, please follow these security best practices:
+
+### Before Committing
+
+1. **Never commit secrets**
+   - No API keys, passwords, tokens, or credentials
+   - Use environment variables (`.env` files)
+   - Verify `.env` is in `.gitignore`
+   ```bash
+   # Check for potential secrets before committing
+   git diff | grep -i "api_key\|password\|secret\|token"
+   ```
+
+2. **Validate all user input**
+   - URLs, file paths, and any user-provided data
+   - Use allowlists for known-good values when possible
+   - Implement reasonable input length limits
+   - Sanitize input to remove control characters
+
+3. **Use subprocess safely**
+   ```python
+   # ✅ GOOD: Use list of arguments, no shell=True
+   subprocess.run(["yt-dlp", "--version"])
+   
+   # ❌ BAD: shell=True with user input (command injection risk)
+   subprocess.run(f"yt-dlp {user_url}", shell=True)
+   ```
+
+4. **Handle errors securely**
+   - Don't leak sensitive information in error messages
+   - Log errors appropriately (avoid logging secrets)
+   - Provide user-friendly error messages
+
+5. **Run security checks**
+   ```bash
+   # Install security tools
+   poetry add --group dev safety bandit
+   
+   # Run checks before committing
+   poetry run safety check          # Check for vulnerable dependencies
+   poetry run bandit -r . -ll       # Security linting
+   ```
+
+### Security Review Checklist
+
+Before submitting a pull request, ensure:
+
+- [ ] No hardcoded secrets, API keys, or passwords
+- [ ] All user input is validated and sanitized
+- [ ] Subprocess calls use argument lists (not shell=True)
+- [ ] Error messages don't leak sensitive information
+- [ ] Dependencies are up to date (`poetry update`)
+- [ ] Security checks pass (`safety check` and `bandit`)
+- [ ] New code includes appropriate input validation
+- [ ] Authentication/authorization is properly implemented (if applicable)
+
+### Security Resources
+
+- [SECURITY.md](SECURITY.md) - Security policy and reporting vulnerabilities
+- [SECURITY_RECOMMENDATIONS.md](SECURITY_RECOMMENDATIONS.md) - Detailed security guidance
+- [SECURITY_CHECKLIST.md](SECURITY_CHECKLIST.md) - Implementation checklist
+
 ## Code of Conduct
 By participating, you agree to abide by a standard open-source code of conduct. Be respectful and constructive in all discussions.
