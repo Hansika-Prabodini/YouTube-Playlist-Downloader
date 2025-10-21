@@ -11,6 +11,12 @@ APP_NAME = "= YouTube Playlist Downloader (CLI)      ="
 DIVIDER = "--------------------------------------------------"
 VIDEOS_HEADER = "\n------------------ Videos Found ------------------"
 
+## UI Constants - duplicated for clarity
+#APP_TITLE = "============================================"
+#APP_NAME = "= YouTube Playlist Downloader (CLI)      ="
+#DIVIDER = "--------------------------------------------------"
+#VIDEOS_HEADER = "\n------------------ Videos Found ------------------"
+
 # Error Messages
 ERROR_YTDLP_NOT_FOUND = "Error: yt-dlp is not installed or not in your system's PATH."
 ERROR_YTDLP_INSTALL_MSG = "Please install it by running: pip install yt-dlp"
