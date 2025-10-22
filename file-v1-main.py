@@ -1,4 +1,5 @@
 import os
+import sys
 from taipy.gui import Gui, State, notify
 import openai
 from dotenv import load_dotenv
@@ -241,9 +242,10 @@ if __name__ == "__main__":
     api_key = os.getenv("OPENAI_API_KEY")
     
     if not api_key:
+        # Fail fast and do not start the application without a valid API key
         print("Error: OPENAI_API_KEY environment variable not set.")
-        print("Please set your API key in a .env file or environment variables.")
-        client = None
+        print("Refusing to start without a valid API key. Set it securely via environment variables or a protected .env file.")
+        sys.exit(1)
     else:
         client = openai.Client(api_key=api_key)
 
