@@ -1,3 +1,4 @@
+```python
 import tkinter as tk
 from tkinter import messagebox, ttk, filedialog
 import customtkinter as ctk
@@ -30,7 +31,8 @@ class YouTubeDownloaderApp(ctk.CTk):
 
         # --- Regular Expressions ---
         # Compile regex once to avoid re-compilation for each download.
-        self.progress_regex = re.compile(r'\[download\]\s+(\d+\.\d+)%')
+        # Match both integer and decimal percentages (e.g., "50%" or "12.3%")
+        self.progress_regex = re.compile(r'\[download\]\s+(\d+(?:\.\d+)?)%')
 
         # --- Start monitoring downloads ---
         # This function will periodically check the status of all active downloads
@@ -160,8 +162,10 @@ class YouTubeDownloaderApp(ctk.CTk):
         # Clear previous video widgets from the display frame
         for widget in self.video_list_frame.winfo_children():
             widget.destroy()
+        # Reset stored widget references for a clean state
+        self.video_widgets.clear()
 
-        fetch_thread = threading.Thread(target=self.fetch_playlist_titles, args=(url,))
+        fetch_thread = threading.Thread(target=self.fetch_playlist_titles, args=(url,), daemon=True)
         fetch_thread.start()
 
     def fetch_playlist_titles(self, url):
@@ -180,9 +184,14 @@ class YouTubeDownloaderApp(ctk.CTk):
                 if line.strip():
                     try:
                         video_json = json.loads(line)
+                        title = video_json.get('title', 'Untitled')
+                        raw_url = video_json.get('url') or video_json.get('id') or ''
+                        # Build a fully-qualified YouTube URL if yt-dlp returned only an ID
+                        if raw_url and '://' not in raw_url:
+                            raw_url = f"https://www.youtube.com/watch?v={raw_url}"
                         self.video_info_list.append({
-                            'title': video_json['title'],
-                            'url': video_json['url']
+                            'title': title,
+                            'url': raw_url
                         })
                     except json.JSONDecodeError:
                         # Ignore lines that are not valid JSON (e.g., yt-dlp warnings)
@@ -196,8 +205,11 @@ class YouTubeDownloaderApp(ctk.CTk):
             # Schedule error message to run on the main Tkinter thread
             self.after(0, lambda error_msg=e: messagebox.showerror("Error", f"Failed to fetch playlist: {error_msg}"))
         finally:
-            self.is_fetching = False
-            self.load_button.configure(state=tk.NORMAL)
+            # Reset fetching state and re-enable button on the main thread
+            def _reset_fetch_state():
+                self.is_fetching = False
+                self.load_button.configure(state=tk.NORMAL)
+            self.after(0, _reset_fetch_state)
 
     def display_videos(self):
         """Displays fetched video titles with download options."""
@@ -283,7 +295,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         widgets['cancel_button'].configure(state=tk.NORMAL) # Enable cancel button
         widgets['status_label'].configure(text="Starting...")
 
-        download_thread = threading.Thread(target=self.run_download, args=(video_url,))
+        download_thread = threading.Thread(target=self.run_download, args=(video_url,), daemon=True)
         download_thread.start()
 
     def run_download(self, video_url):
@@ -297,8 +309,10 @@ class YouTubeDownloaderApp(ctk.CTk):
         
         try:
             # Base command arguments
-            command = ["yt-dlp", "--progress", "--no-playlist"]
+            command = ["yt-dlp", "--progress", "--no-playlist", "--windows-filenames"]
             
+            # Ensure the output directory exists before downloading
+            os.makedirs(self.download_path, exist_ok=True)
             # Add output template with selected path
             output_template = os.path.join(self.download_path, "%(title)s.%(ext)s")
             command.extend(["-o", output_template])
@@ -434,7 +448,7 @@ class YouTubeDownloaderApp(ctk.CTk):
             self.cancel_all_button.configure(state=tk.DISABLED)
             # Only change global status label if it's currently showing "Cancelling..."
             if self.status_label.cget("text").startswith("Cancelling"):
-                 self.status_label.configure(text="All downloads finished or cancelled.")
+                self.status_label.configure(text="All downloads finished or cancelled.")
         else:
             self.download_all_button.configure(state=tk.DISABLED)
             self.cancel_all_button.configure(state=tk.NORMAL)
@@ -443,3 +457,4 @@ class YouTubeDownloaderApp(ctk.CTk):
 if __name__ == "__main__":
     app = YouTubeDownloaderApp()
     app.mainloop()
+```
