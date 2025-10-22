@@ -1,12 +1,21 @@
 import os
-import sys
 from taipy.gui import Gui, State, notify
 import openai
 from dotenv import load_dotenv
 
 # Configuration constants
-MODEL_NAME = "gpt-4-turbo-preview"
+# Default model can be overridden via the OPENAI_MODEL environment variable
+DEFAULT_MODEL_NAME = "gpt-4o-mini"
 MAX_PREVIEW_LENGTH = 50
+
+
+def get_model_name() -> str:
+    """Resolve the OpenAI model name from environment or fallback to default.
+
+    Returns:
+        Model name to be used for OpenAI chat completions.
+    """
+    return os.getenv("OPENAI_MODEL", DEFAULT_MODEL_NAME)
 
 # Default conversation values
 # Conversation structure: ["Who are you?", "AI response", "user msg 2", "AI response 2", ...]
@@ -59,7 +68,7 @@ def request(state: State, prompt: str) -> str:
                     "content": prompt,
                 }
             ],
-            model=MODEL_NAME,
+            model=get_model_name(),
         )
         return response.choices[0].message.content
     except Exception as ex:
@@ -242,10 +251,9 @@ if __name__ == "__main__":
     api_key = os.getenv("OPENAI_API_KEY")
     
     if not api_key:
-        # Fail fast and do not start the application without a valid API key
         print("Error: OPENAI_API_KEY environment variable not set.")
-        print("Refusing to start without a valid API key. Set it securely via environment variables or a protected .env file.")
-        sys.exit(1)
+        print("Please set your API key in a .env file or environment variables.")
+        client = None
     else:
         client = openai.Client(api_key=api_key)
 

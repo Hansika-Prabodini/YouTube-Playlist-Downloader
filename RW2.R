@@ -1,6 +1,23 @@
 
-steps <- 100000
-people <- 1000
+# Steps and people are configurable via environment variables with sane defaults
+# - RW_STEPS: number of steps in the random walk (positive integer)
+# - RW_PEOPLE: number of walkers to simulate (positive integer)
+steps_env <- Sys.getenv("RW_STEPS", unset = "")
+people_env <- Sys.getenv("RW_PEOPLE", unset = "")
+
+steps <- suppressWarnings(as.integer(if (nzchar(steps_env)) steps_env else 100000L))
+people <- suppressWarnings(as.integer(if (nzchar(people_env)) people_env else 1000L))
+
+# Validate and fallback to defaults if invalid
+if (is.na(steps) || steps <= 0L) {
+  warning("Invalid RW_STEPS provided; falling back to 100000")
+  steps <- 100000L
+}
+if (is.na(people) || people <= 0L) {
+  warning("Invalid RW_PEOPLE provided; falling back to 1000")
+  people <- 1000L
+}
+
 starting_positions <- c(1, 5, 10, 20, 100)
 left_probability <- 0.4
 
