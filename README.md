@@ -92,9 +92,22 @@ python youtube_downloader-gui.py
 ### Taipy Chat Demo (experimental)
 ```bash
 pip install taipy openai python-dotenv
-export OPENAI_API_KEY=your_key_here  # or set in a .env
+# Prefer exporting the key in your shell (do NOT hardcode or commit it):
+export OPENAI_API_KEY=your_key_here
+# Optional: create a local .env (never commit); alternatively use a .env.example template.
+# echo "OPENAI_API_KEY=your_key_here" > .env
+
+# Optional runtime config (safe defaults are off):
+# export TAIPY_DEBUG=false
+# export TAIPY_RELOAD=false
+
 python file-v1-main.py
 ```
+
+Notes:
+- The application will refuse to start without OPENAI_API_KEY set.
+- Avoid committing real API keys. If you use a .env, ensure it is ignored by your VCS and consider providing a .env.example instead.
+- Use TAIPY_DEBUG/TAIPY_RELOAD only for local development; leave them unset/false in production.
 
 ### JavaScript Calculator Example
 The `script.js` file contains a standalone calculator implementation for use in an HTML page. Include it in your HTML and ensure matching element IDs (`number1`, `number2`, `calculateBtn`, `result`).
