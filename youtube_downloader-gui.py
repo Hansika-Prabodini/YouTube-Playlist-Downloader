@@ -23,7 +23,16 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.download_processes = {} # Stores active subprocesses (video_url: subprocess.Popen object)
         self.video_widgets = {}      # Stores references to widgets for each video (video_url: dict of widgets)
         self.is_fetching = False     # Flag to prevent multiple fetch operations
-        self.download_path = os.getcwd() # Set default download path to current directory
+        # Determine default download path with overrides and sensible defaults
+        env_download = os.environ.get("YTDL_DOWNLOAD_DIR")
+        if env_download and os.path.isdir(env_download):
+            default_download = env_download
+        else:
+            # Try to use the system Downloads folder if it exists
+            home = os.path.expanduser("~")
+            candidate = os.path.join(home, "Downloads")
+            default_download = candidate if os.path.isdir(candidate) else os.getcwd()
+        self.download_path = default_download
 
         # --- GUI Elements ---
         self.create_widgets()
