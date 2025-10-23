@@ -1,0 +1,21 @@
+ # Ignore local environment files and common virtualenv artifacts
+ .env
+ .env.*
+ 
+ # Python virtual environment
+ .venv/
+ venv/
+ ENV/
+ 
+ # Python cache and build artifacts
+ __pycache__/
+ *.py[cod]
+ *.egg-info/
+ build/
+ dist/
+ 
+ # OS and editor files
+ .DS_Store
+ Thumbs.db
+ .idea/
+ .vscode/
