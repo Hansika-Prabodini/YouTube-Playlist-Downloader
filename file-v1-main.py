@@ -1,7 +1,7 @@
 import os
 from taipy.gui import Gui, State, notify
 import openai
-from dotenv import load_dotenv
+from utils.secrets import get_openai_api_key, mask_secret
 
 # Configuration constants
 # Default model can be overridden via the OPENAI_MODEL environment variable
@@ -246,16 +246,15 @@ page = """
 """
 
 if __name__ == "__main__":
-    # Load environment variables and initialize OpenAI client
-    load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
-    
-    if not api_key:
-        print("Error: OPENAI_API_KEY environment variable not set.")
-        print("Please set your API key in a .env file or environment variables.")
-        client = None
-    else:
+    # Initialize OpenAI client using centralized secret loader
+    try:
+        api_key = get_openai_api_key(required=True)
         client = openai.Client(api_key=api_key)
+        # For debugging only; avoid printing raw secrets. Example (commented):
+        # print(f"Using OpenAI API key: {mask_secret(api_key)}")
+    except EnvironmentError as e:
+        print(str(e))
+        client = None
 
     # Start the GUI
     Gui(page).run(
