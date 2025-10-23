@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "llm-benchmarking-py"
+version = "0.1.0"
+description = "Utilities and examples to benchmark and compare common algorithmic tasks for LLM-related projects."
+authors = ["Your Name <you@example.com>"]
+license = "MIT"
+readme = "README.md"
+packages = []
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+[tool.poetry.dev-dependencies]
+ruff = "*"
+
+[tool.poetry.scripts]
+main = "main:main"
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
+
+# Ruff configuration
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+exclude = [
+    "build",
+    "dist",
+    ".venv",
+    ".ruff_cache",
+    ".mypy_cache",
+    ".pytest_cache",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "S", "B", "PLC", "PLE"]
+
+# Per-file ignores for tests to reduce false positives (e.g., allow assert usage)
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+"test_*.py" = ["S101"]
