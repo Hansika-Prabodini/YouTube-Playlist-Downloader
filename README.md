@@ -14,6 +14,25 @@ A small toolkit of Python utilities and examples to benchmark and compare common
   - `customtkinter` for the GUI YouTube downloader
   - `taipy`, `openai`, and `python-dotenv` for the Taipy chat demo
 
+## Local configuration
+
+Configure your OpenAI API key locally without committing secrets:
+
+- Copy the example file and edit it locally:
+  ```bash
+  cp .env.example .env
+  ```
+- Set your key in .env or export it as an environment variable:
+  ```bash
+  # in .env (local only; never commit)
+  # OPENAI_API_KEY=sk-your_key_here
+
+  # or export in your shell
+  export OPENAI_API_KEY=sk-your_key_here
+  ```
+- Never commit your .env; it is gitignored in this repository.
+- In CI/CD, prefer environment variables or a secret manager; rotate your key immediately if it is ever exposed.
+
 ## Quick Start
 
 ### 1) Clone and set up
