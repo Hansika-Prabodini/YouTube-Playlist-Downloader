@@ -37,6 +37,14 @@ pip install -e .
 pip install pytest pytest-benchmark
 # Optional extras for utilities
 pip install yt-dlp customtkinter taipy openai python-dotenv
+
+# Validate the installation (pick one):
+# 1) Quick import check
+python -c "import main, llm_benchmark; print('OK')"
+# 2) Run the demo (if main is available as a module)
+python -m main
+# 3) Run the test suite (quiet)
+pytest -q
 ```
 
 ## Build and Run
