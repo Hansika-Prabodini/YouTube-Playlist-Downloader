@@ -109,6 +109,25 @@ Notes:
 - Avoid committing real API keys. If you use a .env, ensure it is ignored by your VCS and consider providing a .env.example instead.
 - Use TAIPY_DEBUG/TAIPY_RELOAD only for local development; leave them unset/false in production.
 
+#### Taipy Debug/Reload flags
+- Both default OFF (debug=False, use_reloader=False) when unset or unrecognized.
+- Accepted true values: 1, true, yes, on (case-insensitive; whitespace ignored)
+- Accepted false values: 0, false, no, off (case-insensitive; whitespace ignored)
+
+Enable locally (bash):
+```bash
+export TAIPY_DEBUG=true
+export TAIPY_RELOAD=true
+python file-v1-main.py
+```
+
+Enable locally (PowerShell):
+```powershell
+$env:TAIPY_DEBUG = "true"
+$env:TAIPY_RELOAD = "true"
+python file-v1-main.py
+```
+
 ### JavaScript Calculator Example
 The `script.js` file contains a standalone calculator implementation for use in an HTML page. Include it in your HTML and ensure matching element IDs (`number1`, `number2`, `calculateBtn`, `result`).
 

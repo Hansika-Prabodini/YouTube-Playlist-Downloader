@@ -17,6 +17,23 @@ def get_model_name() -> str:
     """
     return os.getenv("OPENAI_MODEL", DEFAULT_MODEL_NAME)
 
+
+def parse_bool_env(key: str, default: bool = False) -> bool:
+    """
+    Parse a boolean-like environment variable.
+    Accepts: 1/0, true/false, yes/no, on/off (case-insensitive, trims whitespace).
+    Returns default if the variable is unset or unrecognized.
+    """
+    raw = os.getenv(key)
+    if raw is None:
+        return default
+    val = raw.strip().lower()
+    if val in {"1", "true", "yes", "on"}:
+        return True
+    if val in {"0", "false", "no", "off"}:
+        return False
+    return default
+
 # Default conversation values
 # Conversation structure: ["Who are you?", "AI response", "user msg 2", "AI response 2", ...]
 # Index 0, 2, 4... are user messages; Index 1, 3, 5... are AI responses
@@ -257,10 +274,14 @@ if __name__ == "__main__":
     else:
         client = openai.Client(api_key=api_key)
 
+    # Read Taipy runtime flags (default OFF for safety)
+    TAIPY_DEBUG = parse_bool_env("TAIPY_DEBUG", default=False)
+    TAIPY_RELOAD = parse_bool_env("TAIPY_RELOAD", default=False)
+
     # Start the GUI
     Gui(page).run(
         dark_mode=True, 
-        debug=True, 
-        use_reloader=True, 
+        debug=TAIPY_DEBUG, 
+        use_reloader=TAIPY_RELOAD, 
         title="💬 Taipy Chat"
     )
