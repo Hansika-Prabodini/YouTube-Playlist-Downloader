@@ -26,48 +26,63 @@ cd <repo>
 poetry install
 ```
 
-If you prefer not to use Poetry, you can create a virtual environment and install extras manually:
+If you prefer not to use Poetry, you can create a virtual environment and install the package, tests, and optional extras manually:
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
-pip install -U pip
+python -m pip install -U pip
+# Install the package (editable so local changes are picked up)
+pip install -e .
+# Test tooling (optional, but required to run tests/benchmarks)
+pip install pytest pytest-benchmark
 # Optional extras for utilities
 pip install yt-dlp customtkinter taipy openai python-dotenv
 ```
 
 ## Build and Run
-You can either build the environment with Poetry directly or via the helper script.
+You can either build the environment with Poetry directly or via the optional helper script.
 
 - Using Poetry (recommended):
 ```bash
 poetry install
 ```
 
-- Using the helper script:
+- Using the helper script (if present):
 ```bash
 chmod +x build.sh
 ./build.sh
 ```
-Note: `build.sh` sources an optional `variables.sh`. If it doesn’t exist, you can ignore the warning or run `poetry install` directly.
+Note: build.sh is optional and may not exist. If it's absent, just run `poetry install`. It may source an optional `variables.sh`; if that file doesn't exist you can ignore any warning.
+
+Before running, ensure your pyproject.toml defines the Poetry script entry point so `poetry run main` works:
+```
+[tool.poetry.scripts]
+main = "main:main"
+```
 
 ### Run the core demo
 ```bash
 poetry run main
 ```
-This executes `main:main`, which exercises functions from the `llm_benchmark` package (algorithms, data structures, SQL, etc.).
+This executes `main:main`, which exercises functions from the `llm_benchmark` package (algorithms, data structures, SQL, etc.). If you haven't added the script entry point yet, you can temporarily run:
+```bash
+poetry run python -m main
+```
 
 ## Testing and Benchmarking
+Note: Benchmark flags require the `pytest-benchmark` plugin. If it's not installed, omit the `--benchmark-*` flags or install the plugin (e.g., via Poetry dev-deps or `pip install pytest-benchmark`).
+
 - Run tests (quiet):
 ```bash
 poetry run pytest -q
 ```
 
-- Run tests skipping benchmarks:
+- Run tests skipping benchmarks (requires pytest-benchmark):
 ```bash
 poetry run pytest --benchmark-skip
 ```
 
-- Run only benchmarks (if you have benchmark tests):
+- Run only benchmarks (requires pytest-benchmark and benchmark tests):
 ```bash
 poetry run pytest --benchmark-only tests/
 ```
@@ -115,7 +130,7 @@ The `script.js` file contains a standalone calculator implementation for use in 
 ## Project Structure
 - `main.py` – calls into the `llm_benchmark` modules to demonstrate operations
 - `pyproject.toml` – Poetry configuration (script entry point `main:main`)
-- `build.sh` – helper to run `poetry install` (optionally sources `variables.sh`)
+- `build.sh` – optional helper to run `poetry install` (optionally sources `variables.sh`)
 - `test_file_selection.py` – simple test example
 - `youtube_Download-cli.py`, `youtube_downloader-gui.py` – standalone downloaders
 - `file-v1-main.py` – Taipy GUI chat demo
