@@ -1,0 +1,9 @@
+# This is a placeholder lock file committed as part of the task instructions.
+# IMPORTANT: Regenerate with Python 3.11 using Poetry in your environment:
+#   poetry env use 3.11
+#   poetry lock --no-update
+#   poetry install --with dev,cli,gui,chat
+# The resulting lock file will reflect Python 3.11 resolution and exact sub-dependencies.
+
+# Created for project llm-utils-and-demos
+# Date: 2025-10-27
