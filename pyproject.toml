@@ -1,0 +1,46 @@
+[tool.poetry]
+name = "llm_benchmark"
+version = "0.1.0"
+description = "Utilities and examples to benchmark and compare common algorithmic tasks for LLM-related projects, plus optional yt-dlp/customtkinter/Taipy utilities."
+authors = ["Your Name <you@example.com>"]
+license = "MIT"
+readme = "README.md"
+packages = []
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.cli]
+optional = true
+[tool.poetry.group.cli.dependencies]
+yt-dlp = "==2024.08.06"
+
+[tool.poetry.group.gui]
+optional = true
+[tool.poetry.group.gui.dependencies]
+customtkinter = "==5.2.2"
+
+[tool.poetry.group.chat]
+optional = true
+[tool.poetry.group.chat.dependencies]
+taipy = "==4.0.1"
+openai = "==1.43.0"
+python-dotenv = "==1.0.1"
+
+[tool.poetry.group.dev]
+optional = false
+[tool.poetry.group.dev.dependencies]
+ruff = "==0.6.8"
+black = "==24.8.0"
+isort = "==5.13.2"
+bandit = "==1.7.9"
+pre-commit = "==4.0.1"
+detect-secrets = "==1.5.0"
+pip-audit = "==2.7.3"
+
+[tool.poetry.scripts]
+main = "main:main"
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"

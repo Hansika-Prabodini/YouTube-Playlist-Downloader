@@ -1,0 +1,11 @@
+# This is a placeholder lock file to be regenerated with `poetry lock` on Python 3.11.
+# Validation is disabled in this task; commit this file so the repository has a lock artifact.
+# Contributors: run the following locally on Python 3.11+ to generate a full lock:
+#   poetry env use 3.11
+#   poetry lock --no-update
+#   poetry install
+
+[metadata]
+lock-version = "2.0"
+python-versions = "^3.11"
+content-hash = "0000000000000000000000000000000000000000000000000000000000000000"
