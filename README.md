@@ -26,23 +26,19 @@ Prerequisites
 
 Before running either script, ensure you have the following installed on your system:
 
-Python: Version 3.14 is recommended.
-Download from: python.org
+Python: Version 3.10+ is recommended.
+Download from: https://www.python.org
 Important: During Python installation on Windows, make sure to check the box that says "Add Python to PATH" or "Add Python to environment variables."
 
 pip: This is Python's package installer and usually comes bundled with Python. You can verify its installation by running python -m pip --version in your terminal.
 
 yt-dlp: The powerful video downloader that powers these scripts.
 Install it using pip:
-
-# python -m pip install yt-dlp
-
+python -m pip install yt-dlp
 
 CustomTkinter (for GUI application only): A modern Tkinter library for a nicer look.
 Install it using pip:
-
-# python -m pip install customtkinter
-
+python -m pip install customtkinter
 
 How to Run the Applications
 
@@ -50,7 +46,7 @@ How to Run the Applications
 
 This is the graphical version of the downloader.
 
-Save the code: Save the GUI application code (from the last response, starting with import tkinter as tk...) into a file named youtube_downloader.py.
+Save the code: Save the GUI application code into a file named youtube_downloader.py.
 
 Open your terminal/command prompt: Navigate to the directory where you saved youtube_downloader.py.
 
@@ -60,7 +56,7 @@ cd path/to/your/folder
 
 Run the script:
 
-python youtube_downloader-gui.py or ./youtube_downloader-gui.py
+python youtube_downloader.py or ./youtube_downloader.py
 
 A graphical window will appear. Paste your YouTube playlist or video URL, click "Load Playlist," and then choose your download options.
 
@@ -68,9 +64,9 @@ A graphical window will appear. Paste your YouTube playlist or video URL, click 
 
 This is the command-line version of the downloader.
 
-Save the code: Save the CLI script code (from the previous response, starting with import subprocess...) into a file named youtube_cli.py.
+Save the code: Save the CLI script code into a file named youtube_cli.py.
 
-Open your terminal/command prompt: Navigate to the directory where you saved youtube_cli.py
+Open your terminal/command prompt: Navigate to the directory where you saved youtube_cli.py.
 
 cd path/to/your/folder
 
@@ -78,6 +74,6 @@ cd path/to/your/folder
 
 Run the script:
 
-python youtube_Download-cli.py or ./youtube_Download-cli.py
+python youtube_cli.py or ./youtube_cli.py
 
 The script will prompt you directly in the terminal to enter a URL and guide you through the selection and download process.
