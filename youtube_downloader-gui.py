@@ -222,7 +222,7 @@ class YouTubeDownloaderApp(ctk.CTk):
                 progress_bar.pack(side=tk.LEFT, padx=5)
 
                 # Audio Only Checkbox for each video
-                audio_only_video_var = ctk.BooleanVar(value=False)
+                audio_only_video_var = tk.BooleanVar(value=False)
                 audio_only_checkbox = ctk.CTkCheckBox(
                     row_frame,
                     text="MP3", # Shorter text for individual checkbox
