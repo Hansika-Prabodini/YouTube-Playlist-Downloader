@@ -1,28 +1,47 @@
+# youtube_Download-cli.py
+
 import subprocess
 import json
 import sys
 import os
 import re
+from typing import List, Dict, Set
+
+# --- Configuration ---
+DOWNLOAD_DIR = "downloads"
 
 def main():
     """Main function to run the command-line interface."""
-    
+
+    # --- Pre-run Checks ---
     # Check if yt-dlp is installed
     try:
-        subprocess.run(["yt-dlp", "--version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(["yt-dlp", "--version"], check=True, capture_output=True)
     except FileNotFoundError:
-        print("Error: yt-dlp is not installed or not in your system's PATH.")
-        print("Please install it by running: pip install yt-dlp")
+        print("Error: yt-dlp is not installed or not in your system's PATH.", file=sys.stderr)
+        print("Please install it (e.g., 'pip install yt-dlp') and ensure it's accessible.", file=sys.stderr)
+        sys.exit(1)
+    except subprocess.CalledProcessError:
+        print("Error: yt-dlp is installed but seems to be broken.", file=sys.stderr)
         sys.exit(1)
 
-    print("============================================")
-    print("= YouTube Playlist Downloader (CLI)      =")
-    print("============================================")
-    
+    # Create download directory if it doesn't exist
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+
+    print("=============================================")
+    print("=      YouTube Playlist Downloader (CLI)    =")
+    print("=============================================")
+
+    # --- Main Application Loop ---
     while True:
-        playlist_url = input("\nEnter YouTube Playlist URL (or 'exit' to quit): ")
+        playlist_url = input("\nEnter YouTube Playlist URL (or 'exit' to quit): ").strip()
         if playlist_url.lower() == 'exit':
+            print("Exiting.")
             break
+
+        if not playlist_url:
+            continue
 
         print("\nFetching playlist info...")
         videos = fetch_playlist_info(playlist_url)
@@ -30,134 +49,193 @@ def main():
         if videos:
             selected_videos = prompt_for_selection(videos)
             if selected_videos:
-                download_videos(selected_videos)
+                download_videos(selected_videos, DOWNLOAD_DIR)
         else:
-            print("Could not find any videos at that URL. Please try again.")
+            # Error messages from fetch_playlist_info are printed within the function
+            print("Please check the URL and try again.")
 
-def fetch_playlist_info(url):
-    """Fetches video titles and URLs from a playlist."""
+
+def fetch_playlist_info(url: str) -> List[Dict[str, str]]:
+    """
+    Fetches video titles and URLs from a playlist using yt-dlp.
+    Args:
+        url: The URL of a YouTube playlist.
+    Returns:
+        A list of video info dictionaries, or an empty list if an error occurs.
+    """
     try:
         command = [
             "yt-dlp",
             "--flat-playlist",
-            "-j",
-            "--no-warnings", # Hide warnings for a cleaner output
+            "-j",           # Get JSON output
+            "--no-warnings",
             url
         ]
         
-        process = subprocess.Popen(
+        result = subprocess.run(
             command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            capture_output=True,
             text=True,
-            universal_newlines=True
+            check=True  # Raise CalledProcessError for non-zero exit codes
         )
 
-        video_info_list = []
-        for line in iter(process.stdout.readline, ''):
-            if line.strip():
-                try:
-                    video_json = json.loads(line)
+        video_info_list: List[Dict[str, str]] = []
+        for line in result.stdout.strip().split('\n'):
+            if not line:
+                continue
+            try:
+                video_json = json.loads(line)
+                # Ensure basic fields are present
+                if 'title' in video_json and 'url' in video_json:
                     video_info_list.append({
                         'title': video_json['title'],
                         'url': video_json['url']
                     })
-                except json.JSONDecodeError:
-                    pass # Ignore lines that are not valid JSON
-        process.wait()
+            except json.JSONDecodeError:
+                print(f"Warning: Could not decode JSON line: {line}", file=sys.stderr)
+
+        if not video_info_list:
+            print("No videos found in the playlist.", file=sys.stderr)
 
         return video_info_list
 
+    except FileNotFoundError:
+        # This error is already checked in main, but good practice to have it here too.
+        print("Error: yt-dlp not found.", file=sys.stderr)
+        return []
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing yt-dlp: {e}", file=sys.stderr)
+        print(f"Stderr: {e.stderr.strip()}", file=sys.stderr)
+        return []
     except Exception as e:
-        print(f"An error occurred while fetching info: {e}")
+        print(f"An unexpected error occurred while fetching info: {e}", file=sys.stderr)
         return []
 
-def prompt_for_selection(video_list):
-    """Displays videos and prompts user for selection."""
+
+def _parse_user_selection(selection_input: str, max_index: int) -> Set[int]:
+    """
+    Parses the user's video selection string (e.g., '1, 3-5, 7').
+    Args:
+        selection_input: The raw string from the user.
+        max_index: The total number of videos available for selection.
+    Returns:
+        A set of integer indices corresponding to the user's selection.
+    Raises:
+        ValueError: If the input is invalid.
+    """
+    selected_indices: Set[int] = set()
+    parts = re.split(r'[,\s]+', selection_input)
+
+    for part in parts:
+        if not part:
+            continue
+
+        if '-' in part:
+            try:
+                start_str, end_str = part.split('-', 1)
+                if not start_str or not end_str:
+                    raise ValueError(f"Invalid range format: '{part}'.")
+                
+                start = int(start_str)
+                end = int(end_str)
+
+                if start > end:
+                    raise ValueError(f"Start of range '{start}' cannot be greater than end '{end}'.")
+                # Validate bounds for both ends
+                if 1 <= start <= max_index and 1 <= end <= max_index:
+                    selected_indices.update(range(start, end + 1))
+                else:
+                    raise ValueError(f"Range '{part}' is out of bounds (1-{max_index}).")
+            except (ValueError, TypeError):
+                raise ValueError(f"Invalid range format: '{part}'. Please use 'start-end'.")
+        else:
+            try:
+                index = int(part)
+                if 1 <= index <= max_index:
+                    selected_indices.add(index)
+                else:
+                    raise ValueError(f"Index '{part}' is out of bounds (1-{max_index}).")
+            except (ValueError, TypeError):
+                 raise ValueError(f"Invalid number: '{part}'. Please enter a valid integer.")
+    
+    return selected_indices
+
+
+def prompt_for_selection(video_list: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """
+    Displays a list of videos and prompts the user to select which ones to download.
+    Args:
+        video_list: A list of video dictionaries, each with 'title' and 'url'.
+    Returns:
+        A list of selected video dictionaries. Returns an empty list if no selection is made.
+    """
     print("\n------------------ Videos Found ------------------")
     for i, video in enumerate(video_list, 1):
         print(f"[{i:2}] {video['title']}")
     print("--------------------------------------------------")
     
     while True:
-        selection_input = input("\nEnter the number(s) to download (e.g., 1, 5, 8-10) or 'all': ").strip().lower()
+        selection_input = input(
+            "\nEnter video numbers to download (e.g., 1, 5, 8-10), or 'all': "
+        ).strip().lower()
         
+        if not selection_input:
+            print("No input received. Please try again.")
+            continue
+
         if selection_input == 'all':
             return video_list
 
-        selected_indices = set()
-        
-        # Parse ranges and individual numbers
-        parts = re.split(r'[,\s]+', selection_input)
-        
-        valid_input = True
-        for part in parts:
-            if not part:
-                continue
-            
-            if '-' in part:
-                try:
-                    start, end = map(int, part.split('-'))
-                    if 1 <= start <= end <= len(video_list):
-                        selected_indices.update(range(start, end + 1))
-                    else:
-                        print("Invalid range. Please enter valid numbers.")
-                        valid_input = False
-                        break
-                except ValueError:
-                    print("Invalid range format. Use numbers and a dash (e.g., 5-8).")
-                    valid_input = False
-                    break
+        try:
+            selected_indices = _parse_user_selection(selection_input, len(video_list))
+            if selected_indices:
+                # Sort indices to download in a predictable order
+                sorted_indices = sorted(list(selected_indices))
+                return [video_list[i - 1] for i in sorted_indices]
             else:
-                try:
-                    index = int(part)
-                    if 1 <= index <= len(video_list):
-                        selected_indices.add(index)
-                    else:
-                        print("Invalid number. Please enter a valid number from the list.")
-                        valid_input = False
-                        break
-                except ValueError:
-                    print("Invalid input. Please use numbers or 'all'.")
-                    valid_input = False
-                    break
-        
-        if valid_input and selected_indices:
-            return [video_list[i-1] for i in sorted(selected_indices)]
-        else:
-            if valid_input:
-                print("No videos selected. Please try again.")
+                # This case is unlikely if input is given but results in no selections
+                print("No videos were selected. Please enter numbers from the list.")
+        except ValueError as e:
+            print(f"Error: {e}. Please try again.")
 
-def download_videos(videos_to_download):
-    """Downloads the selected videos."""
+def download_videos(videos_to_download: List[Dict[str, str]], download_dir: str) -> None:
+    """
+    Downloads the selected videos one by one using yt-dlp.
+    Args:
+        videos_to_download: A list of video dictionaries to download.
+        download_dir: The directory to save downloaded files.
+    """
+    total_videos = len(videos_to_download)
+    print(f"\n--- Starting Download of {total_videos} Video(s) ---")
+
     for i, video in enumerate(videos_to_download, 1):
-        print(f"\n[{i}/{len(videos_to_download)}] Starting download for: {video['title']}")
+        print(f"\n[{i}/{total_videos}] Downloading: {video['title']}")
         
         try:
-            command = ["yt-dlp", "--progress", video['url']]
+            # Output template for organized downloads
+            output_template = os.path.join(download_dir, "%(title)s [%(id)s].%(ext)s")
+
+            command = [
+                "yt-dlp",
+                "--progress",
+                "-o", output_template,
+                video['url']
+            ]
+
+            # Run command and stream output directly to console
+            subprocess.run(command, check=True)
             
-            # Use Popen to show real-time progress
-            process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
-            
-            for line in iter(process.stdout.readline, ''):
-                sys.stdout.write(line)
-            
-            process.wait()
-            
-            if process.returncode == 0:
-                print(f"Download of '{video['title']}' completed successfully.")
-            else:
-                print(f"Download of '{video['title']}' failed.")
-                
+            print(f"✔ Successfully downloaded '{video['title']}'.")
+
+        except subprocess.CalledProcessError:
+            print(f"✘ Error downloading '{video['title']}'. yt-dlp returned an error.", file=sys.stderr)
         except Exception as e:
-            print(f"An error occurred during download: {e}")
+            print(f"✘ An unexpected error occurred during download of '{video['title']}': {e}", file=sys.stderr)
+
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\nProgram interrupted by user. Exiting.")
+        sys.exit(0)
