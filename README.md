@@ -1,6 +1,16 @@
 YouTube Playlist Downloader
 This repository contains two versions of a simple YouTube playlist (and single video) downloader: a Graphical User Interface (GUI) application and a Command-Line Interface (CLI) script. Both tools leverage yt-dlp to efficiently download videos from YouTube.
 
+Note on missing yt-dlp
+If yt-dlp is not installed or not found in your PATH, the GUI will show an actionable error dialog with the following message:
+
+yt-dlp is not installed or not found in PATH.
+
+Please install it with:
+python -m pip install yt-dlp
+
+This matches the installation guidance below.
+
 Features
 
 GUI Application
