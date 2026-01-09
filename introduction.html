@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Introduction to llm-benchmarking-py</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background-color: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        pre code {
+            background-color: transparent;
+            color: #f8f8f2;
+            padding: 0;
+        }
+        ul {
+            margin-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        strong {
+            color: #2c3e50;
+        }
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h1>Introduction to llm-benchmarking-py</h1>
+
+        <h2>Project Overview</h2>
+        <p>
+            <strong>llm-benchmarking-py</strong> is a small toolkit of Python utilities and examples designed to benchmark and compare common algorithmic tasks for LLM-related projects. The repository provides a comprehensive collection of simple algorithms (sorting, primes), control-flow patterns (single and double loops), data-structure helpers, string utilities, and basic SQL query examples, all invoked from a single <code>main</code> entry point.
+        </p>
+        <p>
+            In addition to the core benchmarking toolkit, the repository includes several standalone utilities:
+        </p>
+        <ul>
+            <li>A YouTube playlist downloader with both CLI and GUI interfaces</li>
+            <li>An experimental Taipy-based chat demo for interactive AI conversations</li>
+            <li>Example JavaScript calculator implementation</li>
+        </ul>
+
+        <p><strong>Key Information:</strong></p>
+        <ul>
+            <li><strong>Package name</strong>: <code>llm_benchmark</code></li>
+            <li><strong>Entry point</strong>: <code>main:main</code> (via Poetry script)</li>
+            <li><strong>License</strong>: MIT</li>
+        </ul>
+
+        <h2>Key Features</h2>
+        <p>The project is organized into several functional areas:</p>
+
+        <p><strong>Core Benchmarking Modules:</strong></p>
+        <ul>
+            <li><strong>Algorithms</strong> (<code>llm_benchmark.algorithms</code>) - Common algorithmic operations including sorting and prime number calculations</li>
+            <li><strong>Control Flow</strong> (<code>llm_benchmark.control</code>) - Single and double loop patterns for performance comparison</li>
+            <li><strong>Data Structures</strong> (<code>llm_benchmark.datastructures</code>) - Helper utilities for working with common data structures</li>
+            <li><strong>Strings</strong> (<code>llm_benchmark.strings</code>) - String manipulation and processing utilities</li>
+            <li><strong>SQL</strong> (<code>llm_benchmark.sql</code>) - Basic SQL query examples and utilities</li>
+        </ul>
+
+        <p><strong>Standalone Utilities:</strong></p>
+        <ul>
+            <li><strong>YouTube Playlist Downloader (CLI)</strong> - Command-line tool for downloading YouTube playlists using yt-dlp</li>
+            <li><strong>YouTube Playlist Downloader (GUI)</strong> - User-friendly graphical interface built with customtkinter</li>
+            <li><strong>Taipy Chat Demo</strong> - Experimental chat interface powered by OpenAI's API</li>
+            <li><strong>JavaScript Calculator</strong> - Standalone calculator implementation for HTML pages</li>
+        </ul>
+
+        <h2>Technology Stack</h2>
+
+        <p><strong>Core Requirements:</strong></p>
+        <ul>
+            <li><strong>Python 3.8+</strong> - The minimum Python version required</li>
+            <li><strong>Poetry</strong> - Recommended package manager for dependency management and virtual environments (<a href="https://python-poetry.org/docs/#installation">installation guide</a>)</li>
+        </ul>
+
+        <p><strong>Optional Dependencies</strong> (for specific utilities):</p>
+        <ul>
+            <li><strong>yt-dlp</strong> - Required for YouTube downloader utilities</li>
+            <li><strong>customtkinter</strong> - Required for the GUI YouTube downloader</li>
+            <li><strong>taipy</strong> - Required for the Taipy chat demo</li>
+            <li><strong>openai</strong> - Required for OpenAI API integration in the chat demo</li>
+            <li><strong>python-dotenv</strong> - For managing environment variables securely</li>
+        </ul>
+
+        <p>The project can be installed either with Poetry (recommended) or using traditional pip and virtual environments.</p>
+
+        <h2>Getting Started</h2>
+        <p>To get started with llm-benchmarking-py, follow these quick steps:</p>
+
+        <p><strong>1. Clone the repository:</strong></p>
+        <pre><code>git clone &lt;this-repo-url&gt;
+cd &lt;repo&gt;</code></pre>
+
+        <p><strong>2. Install dependencies with Poetry (recommended):</strong></p>
+        <pre><code>poetry install</code></pre>
+
+        <p>Alternatively, you can use pip with a virtual environment:</p>
+        <pre><code>python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -U pip</code></pre>
+
+        <p><strong>3. Run the core demo:</strong></p>
+        <pre><code>poetry run main</code></pre>
+
+        <p>This executes the <code>main:main</code> entry point, which exercises functions from the <code>llm_benchmark</code> package including algorithms, data structures, SQL utilities, and more.</p>
+
+        <p><strong>Testing the project:</strong></p>
+        <pre><code># Run all tests quietly
+poetry run pytest -q
+
+# Run tests, skipping benchmarks
+poetry run pytest --benchmark-skip
+
+# Run only benchmark tests
+poetry run pytest --benchmark-only tests/</code></pre>
+
+        <h2>Learn More</h2>
+        <p>For comprehensive documentation including:</p>
+        <ul>
+            <li>Detailed installation instructions</li>
+            <li>Complete utility usage guides (YouTube downloaders, Taipy chat demo)</li>
+            <li>Project architecture and structure</li>
+            <li>Contributing guidelines</li>
+            <li>Advanced testing and benchmarking options</li>
+        </ul>
+
+        <p>Please refer to the <a href="README.md">README.md</a> file in the project root.</p>
+
+        <p><strong>Contributing</strong>: Contributions are welcome! See CONTRIBUTING.md for guidelines on development, testing, benchmarking, and submitting pull requests.</p>
+
+        <p><strong>License</strong>: This project is licensed under the MIT License. See the license declaration in <code>pyproject.toml</code> for details.</p>
+    </div>
+</body>
+</html>
