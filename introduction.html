@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Playlist Downloader</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        h3 {
+            color: #555;
+            margin-top: 20px;
+        }
+        ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        li {
+            padding: 5px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+        li::before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: #3498db;
+            font-weight: bold;
+        }
+        hr {
+            border: none;
+            border-top: 1px solid #ddd;
+            margin: 30px 0;
+        }
+        strong {
+            color: #2c3e50;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .closing {
+            margin-top: 30px;
+            font-style: italic;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>YouTube Playlist Downloader</h1>
+        
+        <p>Welcome to the YouTube Playlist Downloader project! This repository provides two powerful and easy-to-use tools for downloading videos from YouTube: a <strong>Graphical User Interface (GUI)</strong> application and a <strong>Command-Line Interface (CLI)</strong> script.</p>
+        
+        <h2>What Makes This Project Special</h2>
+        
+        <p>Both tools are designed to make downloading YouTube content simple and efficient. Whether you prefer a visual interface or the power of the command line, we've got you covered. The tools leverage the robust <strong>yt-dlp</strong> video downloader to ensure reliable and high-quality downloads.</p>
+        
+        <h2>Key Features</h2>
+        
+        <h3>GUI Application</h3>
+        <ul>
+            <li><strong>User-Friendly Interface</strong>: Easy to use with an intuitive graphical window</li>
+            <li><strong>Playlist Support</strong>: Load entire YouTube playlists and see all video titles</li>
+            <li><strong>Flexible Downloads</strong>: Download specific videos or all videos from a playlist</li>
+            <li><strong>Visual Progress</strong>: Real-time progress bars for each downloading video</li>
+            <li><strong>Custom Save Locations</strong>: Choose where to save your downloaded videos</li>
+            <li><strong>Convenient Controls</strong>: Right-click paste support and cancel options</li>
+        </ul>
+        
+        <h3>CLI Script</h3>
+        <ul>
+            <li><strong>Terminal-Based</strong>: Work directly from your command line interface</li>
+            <li><strong>Playlist Loading</strong>: List all videos from any YouTube playlist URL</li>
+            <li><strong>Smart Selection</strong>: Choose specific videos, ranges, or download everything</li>
+            <li><strong>Real-Time Progress</strong>: View yt-dlp's download progress directly in your terminal</li>
+        </ul>
+        
+        <h2>Powered by yt-dlp</h2>
+        
+        <p>Both applications use <strong>yt-dlp</strong>, a powerful and actively maintained video downloader that ensures compatibility with YouTube and provides reliable downloads with support for various video and audio formats.</p>
+        
+        <hr>
+        
+        <p class="closing">We hope you find these tools useful for your video downloading needs. Whether you're archiving educational content, saving playlists for offline viewing, or managing your media library, this project aims to make the process as smooth as possible. Happy downloading!</p>
+    </div>
+</body>
+</html>
