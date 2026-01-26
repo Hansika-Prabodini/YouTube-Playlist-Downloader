@@ -802,3 +802,10 @@ def test_download_processes_dictionary_operations(mock_app):
     del mock_app.download_processes[test_url]
     assert test_url not in mock_app.download_processes
     assert len(mock_app.download_processes) == 0
+
+    # Additional validation: updating an existing entry behaves as expected
+    mock_app.download_processes[test_url] = mock_process
+    new_proc = MagicMock()
+    mock_app.download_processes[test_url] = new_proc
+    assert mock_app.download_processes[test_url] is new_proc
+    del mock_app.download_processes[test_url]
