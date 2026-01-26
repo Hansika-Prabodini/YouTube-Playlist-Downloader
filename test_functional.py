@@ -76,6 +76,88 @@ def mock_subprocess_success():
 
 
 @pytest.fixture
+def mock_subprocess_success_progress():
+    """
+    Returns a mock subprocess that simulates yt-dlp download with progress.
+    
+    Provides realistic progress output and successful completion.
+    """
+    mock_process = MagicMock()
+    mock_process.stdout.readline.side_effect = [
+        '[download] Destination: /path/to/video.mp4\n',
+        '[download]   0.0% of 10.50MiB at 1.20MiB/s ETA 00:08\n',
+        '[download]  25.5% of 10.50MiB at 1.20MiB/s ETA 00:06\n',
+        '[download]  50.0% of 10.50MiB at 1.20MiB/s ETA 00:04\n',
+        '[download]  75.8% of 10.50MiB at 1.20MiB/s ETA 00:02\n',
+        '[download] 100.0% of 10.50MiB in 00:08\n',
+        ''  # End of output
+    ]
+    mock_process.poll.side_effect = [None, None, None, None, None, 0]  # Running, then completed
+    mock_process.wait.return_value = 0
+    mock_process.returncode = 0
+    return mock_process
+
+
+@pytest.fixture
+def mock_subprocess_failure():
+    """
+    Returns a mock subprocess that simulates failed yt-dlp download.
+    
+    Provides error output for testing error handling.
+    """
+    mock_process = MagicMock()
+    mock_process.stdout.readline.side_effect = [
+        'ERROR: Video unavailable\n',
+        ''  # End of output
+    ]
+    mock_process.poll.return_value = 1
+    mock_process.wait.return_value = 1
+    mock_process.returncode = 1
+    return mock_process
+
+
+@pytest.fixture
+def mock_subprocess_failure():
+    """
+    Returns a mock subprocess that simulates failed yt-dlp download.
+    
+    Provides error output for testing error handling.
+    """
+    mock_process = MagicMock()
+    mock_process.stdout.readline.side_effect = [
+        'ERROR: Video unavailable\n',
+        ''  # End of output
+    ]
+    mock_process.poll.return_value = 1
+    mock_process.wait.return_value = 1
+    mock_process.returncode = 1
+    return mock_process
+
+
+@pytest.fixture
+def mock_subprocess_success_progress():
+    """
+    Returns a mock subprocess that simulates yt-dlp download with progress.
+    
+    Provides realistic progress output and successful completion.
+    """
+    mock_process = MagicMock()
+    mock_process.stdout.readline.side_effect = [
+        '[download] Destination: /path/to/video.mp4\n',
+        '[download]   0.0% of 10.50MiB at 1.20MiB/s ETA 00:08\n',
+        '[download]  25.5% of 10.50MiB at 1.20MiB/s ETA 00:06\n',
+        '[download]  50.0% of 10.50MiB at 1.20MiB/s ETA 00:04\n',
+        '[download]  75.8% of 10.50MiB at 1.20MiB/s ETA 00:02\n',
+        '[download] 100.0% of 10.50MiB in 00:08\n',
+        ''  # End of output
+    ]
+    mock_process.poll.side_effect = [None, None, None, None, None, 0]  # Running, then completed
+    mock_process.wait.return_value = 0
+    mock_process.returncode = 0
+    return mock_process
+
+
+@pytest.fixture
 def mock_subprocess_failure():
     """
     Returns a mock subprocess that simulates failed yt-dlp download.
