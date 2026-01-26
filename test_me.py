@@ -137,11 +137,11 @@ def main():
         
         elif choice == '2':
             # Run unit tests only
-            run_command(['test_unit.py', '-v'])
+            run_command(['-m', 'unit', '-v'])
         
         elif choice == '3':
             # Run functional tests only
-            run_command(['test_functional.py', '-v'])
+            run_command(['-m', 'functional', '-v'])
         
         elif choice == '4':
             # Run with coverage
@@ -159,7 +159,6 @@ def main():
             # Run specific test
             test_name = input("\nEnter test name (e.g., test_progress_regex_with_valid_percentage): ").strip()
             if test_name:
-                # Search in both test files
                 run_command(['-k', test_name, '-v'])
             else:
                 print("No test name provided.")
