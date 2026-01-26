@@ -107,6 +107,21 @@ def sample_playlist_response():
         ''  # End of output
     ]
 
+def wait_for(predicate, timeout=2.0, interval=0.05):
+    """
+    Polls a predicate until it returns True or timeout expires.
+    Returns True if predicate became True, otherwise False.
+    """
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        try:
+            if predicate():
+                return True
+        except Exception:
+            pass
+        time.sleep(interval)
+    return False
+
 
 # ============================================================================
 # COMPLETE DOWNLOAD WORKFLOW TESTS
