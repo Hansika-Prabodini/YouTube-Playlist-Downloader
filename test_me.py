@@ -27,6 +27,16 @@ def print_header():
     print("="*70 + "\n")
 
 
+
+def safe_input(prompt):
+    """Safely reads input, handling EOF gracefully."""
+    try:
+        return input(prompt)
+    except EOFError:
+        print("\nInput interrupted. Exiting.")
+        sys.exit(0)
+
+
 def print_menu():
     """Print the main menu options."""
     print("Select a testing option:\n")
