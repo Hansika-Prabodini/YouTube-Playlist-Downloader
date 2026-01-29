@@ -1,11 +1,10 @@
 import tkinter as tk
-from tkinter import messagebox, ttk, filedialog
+from tkinter import messagebox, filedialog
 import customtkinter as ctk
 import subprocess
 import threading
 import json
 import os
-import sys
 import re
 
 # Main application class
@@ -143,7 +142,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         if self.is_fetching:
             return
         
-        url = self.url_entry.get()
+        url = self.url_entry.get().strip()
         if not url:
             messagebox.showerror("Error", "Please enter a URL.")
             return
@@ -155,8 +154,10 @@ class YouTubeDownloaderApp(ctk.CTk):
         # Clear previous video widgets from the display frame
         for widget in self.video_list_frame.winfo_children():
             widget.destroy()
+        # Clear stored widget references as well
+        self.video_widgets.clear()
 
-        fetch_thread = threading.Thread(target=self.fetch_playlist_titles, args=(url,))
+        fetch_thread = threading.Thread(target=self.fetch_playlist_titles, args=(url,), daemon=True)
         fetch_thread.start()
 
     def fetch_playlist_titles(self, url):
@@ -177,10 +178,13 @@ class YouTubeDownloaderApp(ctk.CTk):
                 if line.strip():
                     try:
                         video_json = json.loads(line)
-                        self.video_info_list.append({
-                            'title': video_json['title'],
-                            'url': video_json['url']
-                        })
+                        # Use 'url' if present, otherwise fall back to 'id'
+                        video_id_or_url = video_json.get('url') or video_json.get('id')
+                        if video_id_or_url:
+                            self.video_info_list.append({
+                                'title': video_json.get('title', 'Untitled'),
+                                'url': video_id_or_url
+                            })
                     except json.JSONDecodeError:
                         # Ignore lines that are not valid JSON (e.g., yt-dlp warnings)
                         pass
@@ -194,7 +198,8 @@ class YouTubeDownloaderApp(ctk.CTk):
             self.after(0, lambda error_msg=e: messagebox.showerror("Error", f"Failed to fetch playlist: {error_msg}"))
         finally:
             self.is_fetching = False
-            self.load_button.configure(state=tk.NORMAL)
+            # Ensure UI updates happen on the main thread
+            self.after(0, lambda: self.load_button.configure(state=tk.NORMAL))
 
     def display_videos(self):
         """Displays fetched video titles with download options."""
@@ -280,7 +285,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         widgets['cancel_button'].configure(state=tk.NORMAL) # Enable cancel button
         widgets['status_label'].configure(text="Starting...")
 
-        download_thread = threading.Thread(target=self.run_download, args=(video_url,))
+        download_thread = threading.Thread(target=self.run_download, args=(video_url,), daemon=True)
         download_thread.start()
 
     def run_download(self, video_url):
@@ -290,7 +295,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         
         try:
             # Base command arguments
-            command = ["yt-dlp", "--progress"]
+            command = ["yt-dlp", "--progress", "--no-playlist"]
             
             # Add output template with selected path
             output_template = os.path.join(self.download_path, "%(title)s.%(ext)s")
@@ -298,7 +303,7 @@ class YouTubeDownloaderApp(ctk.CTk):
 
             # Check if audio-only is selected for THIS video
             if widgets['audio_only_var'].get():
-                command.extend(["--extract-audio", "--audio-format", "mp3", "--no-playlist"])
+                command.extend(["--extract-audio", "--audio-format", "mp3"])
             
             command.append(video_url) # Add the video URL last
 
@@ -313,7 +318,7 @@ class YouTubeDownloaderApp(ctk.CTk):
             self.download_processes[video_url] = process
             
             # Read output in a loop to update progress
-            progress_regex = re.compile(r'\[download\]\s+(\d+\.\d+)%')
+            progress_regex = re.compile(r'\[download\]\s+(\d+(?:\.\d+)?)%')
             
             while True:
                 line = process.stdout.readline()
@@ -411,8 +416,8 @@ class YouTubeDownloaderApp(ctk.CTk):
             process.terminate()
             # The run_download's finally block for each video will handle its cleanup.
             widgets = self.video_widgets[video_url]
-            self.after(0, lambda: widgets['status_label'].configure(text="Cancelling...")) # Immediate feedback
-            self.after(0, lambda: widgets['progress_bar'].set(0)) # Reset progress bar immediately
+            self.after(0, lambda w=widgets: w['status_label'].configure(text="Cancelling...")) # Immediate feedback
+            self.after(0, lambda w=widgets: w['progress_bar'].set(0)) # Reset progress bar immediately
 
         # Global buttons will be reset by _check_global_buttons_state once all processes terminate
 
