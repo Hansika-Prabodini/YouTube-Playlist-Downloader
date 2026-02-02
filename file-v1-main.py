@@ -222,7 +222,7 @@ def select_conv(state: State, var_name: str, value) -> None:
     # Rebuild the context from the conversation history using helper function
     state.context = build_context_from_conversation(state.conversation["Conversation"])
     
-    state.selected_row = [len(state.conversation["Conversation"]) - 1]
+    state.selected_row = [len(state.conversation["Conversation"])]
 
 
 # UI definition
