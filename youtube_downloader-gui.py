@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import re
+import shutil
 
 # Main application class
 class YouTubeDownloaderApp(ctk.CTk):
@@ -188,6 +189,20 @@ class YouTubeDownloaderApp(ctk.CTk):
             # Schedule display_videos to run on the main Tkinter thread
             self.after(0, self.display_videos)
 
+        except FileNotFoundError as fnf_err:
+            # Distinguish between missing yt-dlp and other file errors
+            yt_dlp_path = shutil.which('yt-dlp')
+            if yt_dlp_path is None:
+                # Provide clear, actionable feedback to the user
+                self.after(0, lambda: messagebox.showerror(
+                    'yt-dlp Not Found',
+                    'yt-dlp is not installed or not found in PATH.\n\nPlease install it with:\npython -m pip install yt-dlp'
+                ))
+                # Update status label to reflect error state
+                self.after(0, lambda: self.status_label.configure(text="Error: yt-dlp not found."))
+            else:
+                # If yt-dlp exists, re-raise to be handled by the generic handler
+                raise fnf_err
         except Exception as e:
             # Schedule error message to run on the main Tkinter thread
             self.after(0, lambda error_msg=e: messagebox.showerror("Error", f"Failed to fetch playlist: {error_msg}"))
@@ -364,6 +379,17 @@ class YouTubeDownloaderApp(ctk.CTk):
                 self.after(0, lambda e_msg=error_message: widgets['status_label'].configure(text=f"Download Failed! {e_msg}"))
                 self.after(0, lambda: widgets['progress_bar'].set(0)) # Reset or show failed state
 
+        except FileNotFoundError as fnf_err:
+            yt_dlp_path = shutil.which('yt-dlp')
+            if yt_dlp_path is None:
+                self.after(0, lambda: messagebox.showerror(
+                    'yt-dlp Not Found',
+                    'yt-dlp is not installed or not found in PATH.\n\nPlease install it with:\npython -m pip install yt-dlp'
+                ))
+                self.after(0, lambda: widgets['status_label'].configure(text="Error: yt-dlp not found."))
+                self.after(0, lambda: widgets['progress_bar'].set(0))
+            else:
+                raise fnf_err
         except Exception as e:
             self.after(0, lambda error_msg=e: widgets['status_label'].configure(text=f"Error: {error_msg}"))
         finally:
