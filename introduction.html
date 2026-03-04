@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Introduction to llm-benchmarking-py, a Python toolkit for benchmarking LLM-related algorithmic tasks">
     <title>Introduction to llm-benchmarking-py</title>
     <style>
         body {
@@ -66,13 +67,17 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+        section {
+            margin-bottom: 40px;
+        }
     </style>
 </head>
 <body>
-    <div class="content">
+    <main class="content">
         <h1>Introduction to llm-benchmarking-py</h1>
 
-        <h2>Project Overview</h2>
+        <section>
+            <h2>Project Overview</h2>
         <p>
             <strong>llm-benchmarking-py</strong> is a small toolkit of Python utilities and examples designed to benchmark and compare common algorithmic tasks for LLM-related projects. The repository provides a comprehensive collection of simple algorithms (sorting, primes), control-flow patterns (single and double loops), data-structure helpers, string utilities, and basic SQL query examples, all invoked from a single <code>main</code> entry point.
         </p>
@@ -91,8 +96,10 @@
             <li><strong>Entry point</strong>: <code>main:main</code> (via Poetry script)</li>
             <li><strong>License</strong>: MIT</li>
         </ul>
+        </section>
 
-        <h2>Key Features</h2>
+        <section>
+            <h2>Key Features</h2>
         <p>The project is organized into several functional areas:</p>
 
         <p><strong>Core Benchmarking Modules:</strong></p>
@@ -111,8 +118,10 @@
             <li><strong>Taipy Chat Demo</strong> - Experimental chat interface powered by OpenAI's API</li>
             <li><strong>JavaScript Calculator</strong> - Standalone calculator implementation for HTML pages</li>
         </ul>
+        </section>
 
-        <h2>Technology Stack</h2>
+        <section>
+            <h2>Technology Stack</h2>
 
         <p><strong>Core Requirements:</strong></p>
         <ul>
@@ -130,8 +139,10 @@
         </ul>
 
         <p>The project can be installed either with Poetry (recommended) or using traditional pip and virtual environments.</p>
+        </section>
 
-        <h2>Getting Started</h2>
+        <section>
+            <h2>Getting Started</h2>
         <p>To get started with llm-benchmarking-py, follow these quick steps:</p>
 
         <p><strong>1. Clone the repository:</strong></p>
@@ -160,8 +171,10 @@ poetry run pytest --benchmark-skip
 
 # Run only benchmark tests
 poetry run pytest --benchmark-only tests/</code></pre>
+        </section>
 
-        <h2>Learn More</h2>
+        <section>
+            <h2>Learn More</h2>
         <p>For comprehensive documentation including:</p>
         <ul>
             <li>Detailed installation instructions</li>
@@ -176,6 +189,7 @@ poetry run pytest --benchmark-only tests/</code></pre>
         <p><strong>Contributing</strong>: Contributions are welcome! See CONTRIBUTING.md for guidelines on development, testing, benchmarking, and submitting pull requests.</p>
 
         <p><strong>License</strong>: This project is licensed under the MIT License. See the license declaration in <code>pyproject.toml</code> for details.</p>
-    </div>
+        </section>
+    </main>
 </body>
 </html>
