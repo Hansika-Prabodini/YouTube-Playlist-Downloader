@@ -155,68 +155,50 @@ def fetch_playlist_info(playlist_url: str) -> Dict[str, Any]:
         for line in iter(process.stdout.readline, ''):
             if not line.strip():
                 continue
-            
+
             try:
                 video_json = json.loads(line.strip())
-                
+
                 # Store first JSON for playlist metadata
                 if not first_json:
                     first_json = video_json
-                
+
                 # Parse and store video entry
                 video_info = _parse_video_entry(video_json)
                 if video_info:
                     videos_data.append(video_info)
-                    
+
             except json.JSONDecodeError:
                 # Ignore lines that are not valid JSON (warnings, errors, etc.)
                 continue
-        
+
         # Wait for process to complete
         return_code = process.wait()
-        
+
         # Read any error output
         stderr_output = process.stderr.read()
-        
+
         # Check for errors
         if return_code != 0:
-            # Check for common error patterns in stderr
             error_message = stderr_output.strip()
-            
-            if 'Private video' in error_message or 'private' in error_message.lower():
-                return {
-                    'success': False,
-                    'title': '',
-                    'videos': [],
-                    'video_count': 0,
-                    'error_message': 'Playlist or video is private or unavailable'
-                }
-            elif 'Video unavailable' in error_message or 'unavailable' in error_message.lower():
-                return {
-                    'success': False,
-                    'title': '',
-                    'videos': [],
-                    'video_count': 0,
-                    'error_message': 'Video or playlist is unavailable'
-                }
-            elif 'network' in error_message.lower() or 'connection' in error_message.lower():
-                return {
-                    'success': False,
-                    'title': '',
-                    'videos': [],
-                    'video_count': 0,
-                    'error_message': 'Network error: Unable to connect to YouTube'
-                }
+            # Map common yt-dlp errors to more user-friendly messages
+            if any(keyword in error_message for keyword in ['Private video', 'private playlist', 'private']):
+                error_message = 'Playlist or video is private or unavailable'
+            elif any(keyword in error_message for keyword in ['Video unavailable', 'unavailable']):
+                error_message = 'Video or playlist is unavailable'
+            elif any(keyword in error_message.lower() for keyword in ['network', 'connection', 'timeout']):
+                error_message = 'Network error: Unable to connect to YouTube'
             else:
-                # Generic error
-                return {
-                    'success': False,
-                    'title': '',
-                    'videos': [],
-                    'video_count': 0,
-                    'error_message': error_message or f'Failed to fetch playlist (exit code: {return_code})'
-                }
-        
+                error_message = error_message or f'Failed to fetch playlist (exit code: {return_code})'
+
+            return {
+                'success': False,
+                'title': '',
+                'videos': [],
+                'video_count': 0,
+                'error_message': error_message
+            }
+
         # Check if we got any videos
         if not videos_data:
             return {
@@ -226,10 +208,10 @@ def fetch_playlist_info(playlist_url: str) -> Dict[str, Any]:
                 'video_count': 0,
                 'error_message': 'No videos found in playlist or invalid URL'
             }
-        
+
         # Extract playlist title
         playlist_title = _extract_playlist_title(videos_data, first_json)
-        
+
         # Return success result
         return {
             'success': True,
@@ -238,7 +220,7 @@ def fetch_playlist_info(playlist_url: str) -> Dict[str, Any]:
             'video_count': len(videos_data),
             'error_message': ''
         }
-    
+
     except FileNotFoundError:
         return {
             'success': False,
@@ -247,12 +229,12 @@ def fetch_playlist_info(playlist_url: str) -> Dict[str, Any]:
             'video_count': 0,
             'error_message': 'yt-dlp not found. Please ensure yt-dlp is installed and in PATH.'
         }
-    
+
     except Exception as e:
         return {
             'success': False,
             'title': '',
             'videos': [],
             'video_count': 0,
-            'error_message': f'Unexpected error: {str(e)}'
+            'error_message': f'An unexpected error occurred: {str(e)}'
         }
