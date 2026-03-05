@@ -53,6 +53,12 @@ def test_closure_bug_demonstration():
 def test_closure_bug_with_dict_simulation():
     """
     This test more closely simulates the actual cancel_all scenario with widget dictionaries.
+    
+    The bug: When creating lambdas in a loop that reference loop variables,
+    all lambdas will reference the LAST value of that variable, not the value
+    at the time the lambda was created. This is particularly problematic when
+    the loop variable is a mutable object like a dictionary, as all lambdas
+    will end up referencing the same final state of the dictionary.
     """
     
     # Simulate video widgets dictionary
@@ -65,28 +71,33 @@ def test_closure_bug_with_dict_simulation():
     # Buggy version: simulating the old cancel_all code
     update_functions_buggy = []
     for video_url in video_widgets.keys():
+        # In the buggy version, 'widgets' is captured by reference.
+        # By the time the lambdas are called, 'widgets' will hold the value
+        # from the last iteration of the loop.
         widgets = video_widgets[video_url]
-        # Old buggy code: lambda: (widgets['status'], widgets['progress'])
         update_functions_buggy.append(lambda: (widgets['status'], widgets['progress']))
     
-    # All functions reference the LAST widgets dict
+    # Execute all lambdas. They should all return different values, but they won't.
     results_buggy = [func() for func in update_functions_buggy]
     
-    # Bug: all three return the same values (from the last iteration)
+    # Bug: all three return the same values (from the last iteration's 'widgets')
+    # Expected: [('Ready', 0), ('Downloading', 50), ('Queued', 0)]
+    # Actual: [('Queued', 0), ('Queued', 0), ('Queued', 0)]
     assert all(result == ('Queued', 0) for result in results_buggy), \
         "Buggy version: all functions return the last widget's values"
     
     # Fixed version: simulating the patched cancel_all code  
     update_functions_fixed = []
     for video_url in video_widgets.keys():
+        # In the fixed version, 'widgets' is captured by value using a default argument.
+        # Each lambda gets its own copy of 'widgets' at the time of its creation.
         widgets = video_widgets[video_url]
-        # Fixed code: lambda w=widgets: (w['status'], w['progress'])
         update_functions_fixed.append(lambda w=widgets: (w['status'], w['progress']))
     
-    # Each function should return its own widget's values
+    # Execute all lambdas. They should now return their respective widget values.
     results_fixed = [func() for func in update_functions_fixed]
     
-    # Fix: each function returns its own captured widget values
+    # Fix: each function returns its own captured widget values.
     expected_results = [('Ready', 0), ('Downloading', 50), ('Queued', 0)]
     assert results_fixed == expected_results, \
         "Fixed version: each function returns its own widget's values"
