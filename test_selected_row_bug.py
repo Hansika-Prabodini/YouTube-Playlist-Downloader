@@ -40,30 +40,22 @@ def test_selected_row_indexing():
         ]
     }
     
-    # Test the BUGGY behavior (what the old code did)
-    buggy_selected_row = [len(conversation["Conversation"]) - 1]
+    # Test the FIXED behavior
+    # The original bug was that `select_conv` used `len(state.conversation["Conversation"]) - 1`
+    # which resulted in selecting the second-to-last row due to 0-based vs 1-based indexing mismatch.
+    # The fix changes this to `len(state.conversation["Conversation"])` to align with 1-based indexing.
     
-    # Buggy version would select row 5 (index 4) instead of row 6 (index 5)
-    assert buggy_selected_row == [5], "Buggy version: selected row should be [5]"
-    
-    # In 1-based indexing, row 5 corresponds to index 4 (the 5th message)
-    # which is "Tell me a joke" - NOT the last message!
-    buggy_row_index = buggy_selected_row[0] - 1  # Convert to 0-based index
-    buggy_selected_message = conversation["Conversation"][buggy_row_index]
-    assert buggy_selected_message == "Tell me a joke", \
-        "Buggy version selects the second-to-last message instead of the last one"
-    
-    
-    # Test the FIXED behavior (what the patched code does)
+    # Simulate selecting the last row (row 6) which corresponds to index 5
     fixed_selected_row = [len(conversation["Conversation"])]
     
-    # Fixed version should select row 6 (index 5)
+    # Verify that the fixed version selects row 6
     assert fixed_selected_row == [6], "Fixed version: selected row should be [6]"
     
-    # In 1-based indexing, row 6 corresponds to index 5 (the 6th message)
-    # which is the LAST message
-    fixed_row_index = fixed_selected_row[0] - 1  # Convert to 0-based index
+    # Convert the 1-based selected row to a 0-based index to get the actual message
+    fixed_row_index = fixed_selected_row[0] - 1
     fixed_selected_message = conversation["Conversation"][fixed_row_index]
+    
+    # Verify that the message at the selected row is indeed the last message
     assert fixed_selected_message == "Why did the chicken cross the road?...", \
         "Fixed version correctly selects the last message"
 
