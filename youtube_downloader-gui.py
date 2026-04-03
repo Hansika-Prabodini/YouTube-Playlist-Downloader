@@ -1,13 +1,13 @@
 import tkinter as tk
 from tkinter import messagebox, ttk, filedialog
 import customtkinter as ctk
-import subprocess
 import threading
-import json
 import os
 import sys
 import re
-from collections import deque
+
+import yt_downloader
+import yt_playlist
 
 # Main application class
 class YouTubeDownloaderApp(ctk.CTk):
@@ -20,30 +20,15 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.configure(bg="#f0f0f0")
         
         # --- Variables ---
-        self.download_processes = {} # Stores active subprocesses (video_url: subprocess.Popen object)
+        self.download_processes = {} # Tracks active downloads (video_url: threading.Event for cancellation)
         self.video_widgets = {}      # Stores references to widgets for each video (video_url: dict of widgets)
+        self.video_info_list = []    # Holds metadata for videos in the current playlist
         self.is_fetching = False     # Flag to prevent multiple fetch operations
-        # Determine default download path with overrides and sensible defaults
-        env_download = os.environ.get("YTDL_DOWNLOAD_DIR")
-        if env_download and os.path.isdir(env_download):
-            default_download = env_download
-        else:
-            # Try to use the system Downloads folder if it exists
-            home = os.path.expanduser("~")
-            candidate = os.path.join(home, "Downloads")
-            default_download = candidate if os.path.isdir(candidate) else os.getcwd()
-        self.download_path = default_download
+        self.download_path = os.getcwd() # Set default download path to current directory
+        self._monitor_scheduled = False  # Prevents duplicate monitor_downloads scheduling
 
         # --- GUI Elements ---
         self.create_widgets()
-
-        # --- Regular Expressions ---
-        # Compile regex once to avoid re-compilation for each download.
-        self.progress_regex = re.compile(r'\[download\]\s+(\d+\.\d+)%')
-
-        # --- Start monitoring downloads ---
-        # This function will periodically check the status of all active downloads
-        self.after(100, self.monitor_downloads)
 
     def create_widgets(self):
         # Header Frame: Contains URL input and Load button
@@ -157,7 +142,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         if self.is_fetching:
             return
         
-        url = self.url_entry.get()
+        url = self.url_entry.get().strip()
         if not url:
             messagebox.showerror("Error", "Please enter a URL.")
             return
@@ -169,53 +154,37 @@ class YouTubeDownloaderApp(ctk.CTk):
         # Clear previous video widgets from the display frame
         for widget in self.video_list_frame.winfo_children():
             widget.destroy()
+        self.video_widgets.clear()
+        self.video_info_list = []
 
-        fetch_thread = threading.Thread(target=self.fetch_playlist_titles, args=(url,))
+        fetch_thread = threading.Thread(target=self.fetch_playlist_titles, args=(url,), daemon=True)
         fetch_thread.start()
 
     def fetch_playlist_titles(self, url):
-        """Fetches video titles and URLs from a playlist using yt-dlp."""
-        try:
-            command = ["yt-dlp", "--flat-playlist", "-j", url]
-            process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True
-            )
+        """Fetches video metadata from a playlist using yt_playlist.fetch_playlist_info()."""
+        result = yt_playlist.fetch_playlist_info(url)
 
-            self.video_info_list = []
-            for line in iter(process.stdout.readline, ''):
-                if line.strip():
-                    try:
-                        video_json = json.loads(line)
-                        self.video_info_list.append({
-                            'title': video_json['title'],
-                            'url': video_json['url']
-                        })
-                    except json.JSONDecodeError:
-                        # Ignore lines that are not valid JSON (e.g., yt-dlp warnings)
-                        pass
-            process.wait()
-
-            # Schedule display_videos to run on the main Tkinter thread
+        if result['success']:
+            self.video_info_list = result['videos']
             self.after(0, self.display_videos)
+        else:
+            error_message = result['error_message'] or "Failed to fetch playlist."
+            self.after(0, lambda msg=error_message: self.status_label.configure(text=msg))
+            self.after(0, lambda msg=error_message: messagebox.showerror("Error", msg))
 
-        except Exception as e:
-            # Schedule error message to run on the main Tkinter thread
-            self.after(0, lambda error_msg=e: messagebox.showerror("Error", f"Failed to fetch playlist: {error_msg}"))
-        finally:
-            self.is_fetching = False
-            self.load_button.configure(state=tk.NORMAL)
+        self.is_fetching = False
+        self.after(0, lambda: self.load_button.configure(state=tk.NORMAL))
 
     def display_videos(self):
         """Displays fetched video titles with download options."""
         if self.video_info_list:
             self.status_label.configure(text=f"Found {len(self.video_info_list)} videos. Ready to download.")
             self.download_all_button.configure(state=tk.NORMAL)
+            self.video_widgets.clear()
             
             for video_info in self.video_info_list:
-                video_url = video_info['url']
+                # Use the full webpage URL for downloading; fall back to 'url' (may be a video ID)
+                video_url = video_info.get('webpage_url') or video_info['url']
                 
                 # Frame for each video row
                 row_frame = ctk.CTkFrame(self.video_list_frame, fg_color="transparent")
@@ -280,109 +249,72 @@ class YouTubeDownloaderApp(ctk.CTk):
 
     def start_single_download(self, video_url):
         """Prepares and starts the download of a single video in a new thread."""
-        if video_url in self.download_processes: # Prevent double-clicking
+        if video_url in self.download_processes:  # Prevent double-clicking
             return
-        
+
+        # Create a cancel event for this download; stored so cancel methods can set it
+        cancel_event = threading.Event()
+        self.download_processes[video_url] = cancel_event
+
         # Disable global download all and enable global cancel all
         self.download_all_button.configure(state=tk.DISABLED)
         self.cancel_all_button.configure(state=tk.NORMAL)
-        
+
         widgets = self.video_widgets[video_url]
         widgets['download_button'].configure(state=tk.DISABLED)
-        widgets['cancel_button'].configure(state=tk.NORMAL) # Enable cancel button
+        widgets['cancel_button'].configure(state=tk.NORMAL)
         widgets['status_label'].configure(text="Starting...")
 
-        download_thread = threading.Thread(target=self.run_download, args=(video_url,))
+        download_thread = threading.Thread(target=self.run_download, args=(video_url,), daemon=True)
         download_thread.start()
 
+        # Ensure the monitor loop is running while downloads are active
+        self._schedule_monitor()
+
     def run_download(self, video_url):
-        """Executes the yt-dlp command for a single video."""
+        """Downloads a single video by delegating to yt_downloader.download_video()."""
         widgets = self.video_widgets[video_url]
-        # Use deque to store only the last N lines of output.
-        # This limits memory usage, especially for verbose yt-dlp output,
-        # while still providing sufficient context for error messages.
-        MAX_ERROR_CONTEXT_LINES = 50 
-        full_output_buffer = deque(maxlen=MAX_ERROR_CONTEXT_LINES)
-        
+        cancel_event = self.download_processes[video_url]  # threading.Event set by cancel methods
+        progress_regex = re.compile(r'\[download\]\s+(\d+(?:\.\d+)?)%')
+
+        def progress_callback(line: str) -> None:
+            """Forward each output line to the progress bar and status label."""
+            match = progress_regex.search(line)
+            if match:
+                try:
+                    percentage = float(match.group(1)) / 100.0
+                    self.after(0, lambda p=percentage, w=widgets: w['progress_bar'].set(p))
+                except (ValueError, IndexError):
+                    pass
+            self.after(0, lambda t=line, w=widgets: w['status_label'].configure(text=t))
+
         try:
-            # Base command arguments
-            command = ["yt-dlp", "--progress", "--no-playlist"]
-            
-            # Add output template with selected path
-            output_template = os.path.join(self.download_path, "%(title)s.%(ext)s")
-            command.extend(["-o", output_template])
-
-            # Check if audio-only is selected for THIS video
-            if widgets['audio_only_var'].get():
-                command.extend(["--extract-audio", "--audio-format", "mp3"])
-            
-            command.append(video_url) # Add the video URL last
-
-            process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT, # Merge stdout and stderr for simpler parsing
-                text=True,
-                bufsize=1  # Line-buffered output
+            result = yt_downloader.download_video(
+                video_url=video_url,
+                download_path=self.download_path,
+                extract_audio=widgets['audio_only_var'].get(),
+                progress_callback=progress_callback,
+                cancel_check=cancel_event.is_set
             )
-            self.download_processes[video_url] = process
-            
-            # Read output in a loop to update progress
-            for line in process.stdout:
-                if not line:
-                    break
-                
-                full_output_buffer.append(line) # Store in the limited buffer
 
-                # process termination and empty line check combined for early break
-                if process.poll() is not None and line.strip() == '':
-                    break
-
-                match = self.progress_regex.search(line)
-                if match:
-                    try:
-                        percentage = float(match.group(1)) / 100.0
-                        self.after(0, lambda p=percentage: widgets['progress_bar'].set(p))
-                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
-                    except (ValueError, IndexError):
-                        self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
-                else:
-                    self.after(0, lambda l=line.strip(): widgets['status_label'].configure(text=l))
-            
-            process.wait()
-
-            # --- FINAL STATUS DETERMINATION ---
-            is_success = False
-            combined_output_str = "".join(full_output_buffer)
-
-            if process.returncode == 0:
-                is_success = True
+            if result['success']:
+                self.after(0, lambda w=widgets: w['status_label'].configure(text="Download Completed!"))
+                self.after(0, lambda w=widgets: w['progress_bar'].set(1.0))
             else:
-                if (re.search(r'\[download\] 100%', combined_output_str) or
-                    re.search(r'\[ExtractAudio\] Destination:', combined_output_str) or
-                    re.search(r'\[ffmpeg\] Destination:', combined_output_str) or
-                    re.search(r'\[Merger\] Merging formats into', combined_output_str)):
-                    is_success = True
-            
-            if is_success:
-                self.after(0, lambda: widgets['status_label'].configure(text="Download Completed!"))
-                self.after(0, lambda: widgets['progress_bar'].set(1.0))
-            else:
-                error_message = combined_output_str.strip()
-                if not error_message:
-                    error_message = f"Unknown error (Exit Code: {process.returncode})"
-                self.after(0, lambda e_msg=error_message: widgets['status_label'].configure(text=f"Download Failed! {e_msg}"))
-                self.after(0, lambda: widgets['progress_bar'].set(0))
+                error_message = result['error_message'] or "Unknown error"
+                self.after(0, lambda w=widgets, e=error_message: w['status_label'].configure(
+                    text=f"Download Failed! {e}"
+                ))
+                self.after(0, lambda w=widgets: w['progress_bar'].set(0))
 
         except Exception as e:
-            self.after(0, lambda error_msg=e: widgets['status_label'].configure(text=f"Error: {error_msg}"))
+            self.after(0, lambda w=widgets, err=e: w['status_label'].configure(text=f"Error: {err}"))
         finally:
-            if video_url in self.download_processes:
-                del self.download_processes[video_url]
-            
-            self.after(0, lambda: widgets['download_button'].configure(state=tk.NORMAL))
-            self.after(0, lambda: widgets['cancel_button'].configure(state=tk.DISABLED))
-            
+            # Remove from active downloads and reset per-video UI
+            self.download_processes.pop(video_url, None)
+            self.after(0, lambda w=widgets: w['download_button'].configure(state=tk.NORMAL))
+            self.after(0, lambda w=widgets: w['cancel_button'].configure(state=tk.DISABLED))
+            # Trigger a final global button state check on the main thread
             self.after(0, self._check_global_buttons_state)
 
 
@@ -392,58 +324,55 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.cancel_all_button.configure(state=tk.NORMAL)
         
         for video_info in self.video_info_list:
-            video_url = video_info['url']
+            video_url = video_info.get('webpage_url') or video_info['url']
             # Only start if not already downloading
             if video_url not in self.download_processes:
                 self.start_single_download(video_url)
 
     def cancel_single_download(self, video_url):
-        """Terminates the subprocess for a specific video download."""
+        """Signals the download thread for a specific video to stop via its cancel event."""
         if video_url in self.download_processes:
-            process = self.download_processes[video_url]
-            process.terminate() # Send termination signal
-            # The run_download's finally block will handle cleanup and UI reset
+            self.download_processes[video_url].set()  # Signal the cancel_check callback
             widgets = self.video_widgets[video_url]
-            # Use default argument for consistency and to avoid potential closure issues
-            self.after(0, lambda w=widgets: (w['status_label'].configure(text="Cancelling..."),
-                                    w['progress_bar'].set(0))) # Reset progress bar immediately
+            self.after(0, lambda w=widgets: w['status_label'].configure(text="Cancelling..."))
+            self.after(0, lambda w=widgets: w['progress_bar'].set(0))
 
     def cancel_all(self):
-        """Terminates all active download subprocesses."""
+        """Signals all active download threads to stop via their cancel events."""
         self.status_label.configure(text="Cancelling all downloads...")
-        
-        # Create a list of keys to avoid RuntimeError: dictionary changed size during iteration
-        keys_to_terminate = list(self.download_processes)  # Avoid RuntimeError during iteration
-        for video_url in keys_to_terminate:
-            process = self.download_processes[video_url]
-            process.terminate()
-            # The run_download's finally block for each video will handle its cleanup.
+        # Iterate over a snapshot of keys to avoid mutation during iteration
+        for video_url, cancel_event in list(self.download_processes.items()):
+            cancel_event.set()
             widgets = self.video_widgets[video_url]
-            # Fix: Capture widgets by value using default argument to avoid closure bug
-            self.after(0, lambda w=widgets: (w['status_label'].configure(text="Cancelling..."),
-                                    w['progress_bar'].set(0))) # Reset progress bar immediately
+            self.after(0, lambda w=widgets: w['status_label'].configure(text="Cancelling..."))
+            self.after(0, lambda w=widgets: w['progress_bar'].set(0))
+        # Global buttons reset by _check_global_buttons_state once all threads finish
 
-        # Global buttons will be reset by _check_global_buttons_state once all processes terminate
+    def _schedule_monitor(self):
+        """Start monitor_downloads polling only when it is not already scheduled."""
+        if not self._monitor_scheduled:
+            self._monitor_scheduled = True
+            self.after(100, self.monitor_downloads)
 
     def monitor_downloads(self):
-        """Periodically checks the status of active downloads and updates UI."""
-        # The actual status update logic is now primarily within run_download's loop and finally block.
-        # This monitor is mainly for global button state and general app status.
-        
-        # We just need to check if there are any processes left to decide global button state
+        """Checks global button state while downloads are active; stops when idle."""
+        self._monitor_scheduled = False
         self._check_global_buttons_state()
-
-        # Reschedule the next check
-        self.after(100, self.monitor_downloads)
+        # Only reschedule when there is still at least one active download
+        if self.download_processes:
+            self._schedule_monitor()
 
     def _check_global_buttons_state(self):
         """Helper to enable/disable global Download All/Cancel All buttons."""
-        if not self.download_processes: # No active downloads
+        active_cancels = any(
+            widgets['cancel_button'].cget("state") == tk.NORMAL for widgets in self.video_widgets.values()
+        )
+        if not self.download_processes and not active_cancels: # No active downloads
             self.download_all_button.configure(state=tk.NORMAL)
             self.cancel_all_button.configure(state=tk.DISABLED)
             # Only change global status label if it's currently showing "Cancelling..."
             if self.status_label.cget("text").startswith("Cancelling"):
-                 self.status_label.configure(text="All downloads finished or cancelled.")
+                self.status_label.configure(text="All downloads finished or cancelled.")
         else:
             self.download_all_button.configure(state=tk.DISABLED)
             self.cancel_all_button.configure(state=tk.NORMAL)

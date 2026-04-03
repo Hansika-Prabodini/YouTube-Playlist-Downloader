@@ -1,21 +1,18 @@
 import subprocess
-import json
 import sys
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Optional, Set
+
+import yt_playlist
+import yt_downloader
 
 # UI Constants
 APP_TITLE = "============================================"
 APP_NAME = "= YouTube Playlist Downloader (CLI)      ="
 DIVIDER = "--------------------------------------------------"
 VIDEOS_HEADER = "\n------------------ Videos Found ------------------"
-
-## UI Constants - duplicated for clarity
-#APP_TITLE = "============================================"
-#APP_NAME = "= YouTube Playlist Downloader (CLI)      ="
-#DIVIDER = "--------------------------------------------------"
-#VIDEOS_HEADER = "\n------------------ Videos Found ------------------"
 
 # Error Messages
 ERROR_YTDLP_NOT_FOUND = "Error: yt-dlp is not installed or not in your system's PATH."
@@ -41,7 +38,7 @@ MSG_DOWNLOAD_FAILED = "Download of '{}' failed."
 
 def main() -> None:
     """Main function to run the command-line interface."""
-    
+
     # Check if yt-dlp is installed
     try:
         subprocess.run(["yt-dlp", "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -53,68 +50,21 @@ def main() -> None:
     print(APP_TITLE)
     print(APP_NAME)
     print(APP_TITLE)
-    
+
     while True:
         playlist_url = input(PROMPT_PLAYLIST_URL)
         if playlist_url.lower() == 'exit':
             break
 
         print(MSG_FETCHING)
-        videos = fetch_playlist_info(playlist_url)
+        result = yt_playlist.fetch_playlist_info(playlist_url)
 
-        if videos:
-            selected_videos = prompt_for_selection(videos)
+        if result['success'] and result['videos']:
+            selected_videos = prompt_for_selection(result['videos'])
             if selected_videos:
                 download_videos(selected_videos)
         else:
-            print(ERROR_NO_VIDEOS)
-
-def fetch_playlist_info(url: str) -> List[Dict[str, str]]:
-    """
-    Fetches video titles and URLs from a YouTube playlist.
-    
-    Args:
-        url: The YouTube playlist URL
-        
-    Returns:
-        A list of dictionaries containing 'title' and 'url' for each video,
-        or an empty list if an error occurs
-    """
-    try:
-        command = [
-            "yt-dlp",
-            "--flat-playlist",
-            "-j",
-            "--no-warnings",  # Hide warnings for a cleaner output
-            url
-        ]
-        
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-
-        video_info_list = []
-        for line in iter(process.stdout.readline, ''):
-            if line.strip():
-                try:
-                    video_json = json.loads(line)
-                    video_info_list.append({
-                        'title': video_json['title'],
-                        'url': video_json['url']
-                    })
-                except json.JSONDecodeError:
-                    pass  # Ignore lines that are not valid JSON
-        
-        return_code = process.wait()
-        
-        # Return videos only if the process completed successfully
-        if return_code == 0:
-            return video_info_list
-        else:
-            print(f"yt-dlp exited with code {return_code}")
-            return []
-
-    except (OSError, subprocess.SubprocessError) as e:
-        print(ERROR_FETCH_INFO.format(e))
-        return []
+            print(result['error_message'] or ERROR_NO_VIDEOS)
 
 def parse_selection_input(selection_input: str, max_index: int) -> Optional[Set[int]]:
     """
@@ -189,36 +139,48 @@ def prompt_for_selection(video_list: List[Dict[str, str]]) -> Optional[List[Dict
             # Empty set - valid input but no videos selected
             print(ERROR_NO_SELECTION)
 
-def download_videos(videos_to_download: List[Dict[str, str]]) -> None:
+def download_videos(videos_to_download: List[Dict[str, str]], max_workers: int = 1) -> None:
     """
-    Downloads the selected videos using yt-dlp.
-    
+    Downloads the selected videos using yt_downloader.download_video().
+
+    Supports optional concurrent downloads via ThreadPoolExecutor. Pass
+    max_workers > 1 to download multiple videos simultaneously.
+
     Args:
-        videos_to_download: List of video dictionaries with 'title' and 'url'
+        videos_to_download: List of video dictionaries (from yt_playlist.fetch_playlist_info)
+                            containing at least 'title', 'url', and 'webpage_url'.
+        max_workers: Number of parallel download workers (default: 1 = sequential).
     """
-    for i, video in enumerate(videos_to_download, 1):
-        print(MSG_DOWNLOAD_START.format(i, len(videos_to_download), video['title']))
-        
-        try:
-            command = ["yt-dlp", "--progress", video['url']]
-            
-            # Use Popen to show real-time progress
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            
-            for line in iter(process.stdout.readline, ''):
-                sys.stdout.write(line)
+    total = len(videos_to_download)
+    download_dir = os.getcwd()
+
+    def _download_one(index_video: tuple) -> None:
+        i, video = index_video
+        title = video.get('title', 'Unknown')
+        # Prefer the full webpage URL; fall back to the raw 'url' field (may be an ID)
+        video_url = video.get('webpage_url') or video.get('url', '')
+
+        print(MSG_DOWNLOAD_START.format(i, total, title))
+
+        def progress_cb(line: str) -> None:
+            sys.stdout.write(line + '\n')
             sys.stdout.flush()
-            
-            # Wait for the process to complete
-            process.wait()
-            
-            if process.returncode == 0:
-                print(MSG_DOWNLOAD_SUCCESS.format(video['title']))
-            else:
-                print(MSG_DOWNLOAD_FAILED.format(video['title']))
-                
-        except Exception as e:
-            print(ERROR_DOWNLOAD.format(e))
+
+        result = yt_downloader.download_video(
+            video_url=video_url,
+            download_path=download_dir,
+            progress_callback=progress_cb
+        )
+
+        if result['success']:
+            print(MSG_DOWNLOAD_SUCCESS.format(title))
+        else:
+            print(MSG_DOWNLOAD_FAILED.format(title))
+            if result['error_message']:
+                print(f"  Reason: {result['error_message']}")
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        executor.map(_download_one, enumerate(videos_to_download, 1))
 
 
 if __name__ == "__main__":
