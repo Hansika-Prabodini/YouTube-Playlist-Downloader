@@ -383,6 +383,91 @@ class YouTubeDownloaderApp(ctk.CTk):
             self.after(0, self._check_global_buttons_state)
 
 
+    # ------------------------------------------------------------------
+    # Outcome classification
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def classify_download_outcome(return_code: int, output: str) -> str:
+        """Return an unambiguous outcome label for a completed yt-dlp process.
+
+        Parameters
+        ----------
+        return_code:
+            The integer exit code returned by the subprocess.
+        output:
+            The combined stdout + stderr captured from the subprocess.
+
+        Returns
+        -------
+        One of:
+            ``'already_downloaded'`` – file was present and skipped.
+            ``'success'``            – download completed normally.
+            ``'cancelled'``          – process was terminated externally.
+            ``'error'``              – any other failure condition.
+        """
+        text = output or ""
+
+        # ── Success-family patterns ────────────────────────────────────
+        already_patterns = [
+            "has already been downloaded",
+            "[download] has already been downloaded",
+            "already been downloaded and merged",
+        ]
+        for pat in already_patterns:
+            if pat in text:
+                return "already_downloaded"
+
+        success_patterns = [
+            "[download] 100%",
+            "100% of",          # alternate yt-dlp progress format
+            "[ffmpeg] Merging",  # post-processing started → download done
+            "Destination:",     # written to file
+        ]
+        if return_code == 0:
+            # Even a clean exit without progress lines counts as success
+            # unless an error keyword is also present (handled below).
+            for pat in success_patterns:
+                if pat in text:
+                    return "success"
+
+        # ── Error / Warning patterns ───────────────────────────────────
+        error_patterns = [
+            "ERROR:",
+            "error:",
+            "unable to download",
+            "Unable to download",
+            "HTTP Error",
+            "URLError",
+            "Sign in to confirm",
+            "This video is unavailable",
+            "Video unavailable",
+        ]
+        for pat in error_patterns:
+            if pat in text:
+                return "error"
+
+        warning_patterns = [
+            "WARNING:",
+            "warning:",
+        ]
+        # A warning alone with a zero return code is still a success.
+        has_warning = any(pat in text for pat in warning_patterns)
+
+        # ── Return-code heuristics ─────────────────────────────────────
+        if return_code == 0:
+            return "success"
+
+        # POSIX: return code -15 (SIGTERM) or Windows: 1 after terminate()
+        if return_code in (-15, -9, 1):
+            # Only label as cancelled if no error text was captured
+            if not any(pat in text for pat in error_patterns):
+                return "cancelled"
+
+        return "error"
+
+    # ------------------------------------------------------------------
+
     def download_all(self):
         """Starts downloading all videos in the loaded playlist."""
         self.download_all_button.configure(state=tk.DISABLED)
@@ -395,28 +480,49 @@ class YouTubeDownloaderApp(ctk.CTk):
                 self.start_single_download(video_url)
 
     def cancel_single_download(self, video_url):
-        """Terminates the subprocess for a specific video download."""
+        """Terminates the subprocess for a specific video download.
+
+        Stamps a ``'cancelled'`` sentinel so that ``run_download``'s
+        finally block can call :meth:`classify_download_outcome` with the
+        correct context and produce a consistent outcome label.
+        """
         if video_url in self.download_processes:
             process = self.download_processes[video_url]
-            process.terminate() # Send termination signal
-            # The run_download's finally block will handle cleanup and UI reset
+            # Stamp a sentinel before terminating so the finally block knows
+            # the stop was intentional (not a genuine error).
+            self._cancelled_urls.add(video_url)
+            process.terminate()  # Send termination signal (SIGTERM / TerminateProcess)
             widgets = self.video_widgets[video_url]
-            self.after(0, lambda w=widgets: w['status_label'].configure(text="Cancelling...")) # Immediate feedback
-            self.after(0, lambda w=widgets: w['progress_bar'].set(0)) # Reset progress bar immediately
+            # Immediate UI feedback while the process winds down
+            self.after(
+                0,
+                lambda w=widgets: w['status_label'].configure(
+                    text=self._outcome_display_text("cancelled")
+                ),
+            )
+            self.after(0, lambda w=widgets: w['progress_bar'].set(0))
 
     def cancel_all(self):
         """Terminates all active download subprocesses."""
-        self.status_label.configure(text="Cancelling all downloads...")
-        
-        # Create a list of keys to avoid RuntimeError: dictionary changed size during iteration
+        self.status_label.configure(
+            text=self._outcome_display_text("cancelled", global_=True)
+        )
+
+        # Snapshot keys to avoid RuntimeError on dict size change during iteration
         keys_to_terminate = list(self.download_processes.keys())
         for video_url in keys_to_terminate:
+            # Stamp sentinel before terminating (same logic as cancel_single_download)
+            self._cancelled_urls.add(video_url)
             process = self.download_processes[video_url]
             process.terminate()
-            # The run_download's finally block for each video will handle its cleanup.
             widgets = self.video_widgets[video_url]
-            self.after(0, lambda w=widgets: w['status_label'].configure(text="Cancelling...")) # Immediate feedback
-            self.after(0, lambda w=widgets: w['progress_bar'].set(0)) # Reset progress bar immediately
+            self.after(
+                0,
+                lambda w=widgets: w['status_label'].configure(
+                    text=self._outcome_display_text("cancelled")
+                ),
+            )
+            self.after(0, lambda w=widgets: w['progress_bar'].set(0))
 
         # Global buttons will be reset by _check_global_buttons_state once all processes terminate
 
@@ -431,21 +537,68 @@ class YouTubeDownloaderApp(ctk.CTk):
         # Reschedule the next check
         self.after(100, self.monitor_downloads)
 
+    # ------------------------------------------------------------------
+    # Outcome → human-readable text mapping
+    # ------------------------------------------------------------------
+
+    _OUTCOME_TEXT = {
+        "success":           "Downloaded successfully",
+        "already_downloaded": "Already downloaded – skipped",
+        "cancelled":         "Cancelled",
+        "error":             "Error – download failed",
+    }
+
+    _OUTCOME_TEXT_GLOBAL = {
+        "success":           "All downloads finished.",
+        "already_downloaded": "All files already present.",
+        "cancelled":         "Cancelling all downloads…",
+        "error":             "One or more downloads failed.",
+    }
+
+    @classmethod
+    def _outcome_display_text(cls, outcome: str, *, global_: bool = False) -> str:
+        """Return a UI-friendly string for *outcome*.
+
+        Parameters
+        ----------
+        outcome:
+            One of the labels produced by :meth:`classify_download_outcome`.
+        global_:
+            When ``True``, return the application-level status bar text;
+            otherwise return the per-video status label text.
+        """
+        mapping = cls._OUTCOME_TEXT_GLOBAL if global_ else cls._OUTCOME_TEXT
+        return mapping.get(outcome, outcome.replace("_", " ").capitalize())
+
+    # ------------------------------------------------------------------
+
     def _check_global_buttons_state(self):
-        """Helper to enable/disable global Download All/Cancel All buttons."""
+        """Helper to enable/disable global Download All/Cancel All buttons.
+
+        Uses outcome labels rather than raw string prefix checks so that
+        the condition is not sensitive to display-text wording changes.
+        """
         active_cancels = any(
-            widgets['cancel_button'].cget("state") == tk.NORMAL for widgets in self.video_widgets.values()
+            widgets['cancel_button'].cget("state") == tk.NORMAL
+            for widgets in self.video_widgets.values()
         )
-        if not self.download_processes and not active_cancels: # No active downloads
+        if not self.download_processes and not active_cancels:  # No active downloads
             self.download_all_button.configure(state=tk.NORMAL)
             self.cancel_all_button.configure(state=tk.DISABLED)
-            # Only change global status label if it's currently showing "Cancelling..."
-            if self.status_label.cget("text").startswith("Cancelling"):
-                self.status_label.configure(text="All downloads finished or cancelled.")
+            # Determine an aggregate outcome label for the global status bar.
+            current_text = self.status_label.cget("text")
+            # Only overwrite if the bar is showing a transient "in-progress" message.
+            transient_texts = {
+                self._outcome_display_text("cancelled", global_=True),
+                "Cancelling all downloads…",   # legacy guard
+            }
+            if current_text in transient_texts:
+                self.status_label.configure(
+                    text="All downloads finished or cancelled."
+                )
         else:
             self.download_all_button.configure(state=tk.DISABLED)
             self.cancel_all_button.configure(state=tk.NORMAL)
-
 
 if __name__ == "__main__":
     app = YouTubeDownloaderApp()
